@@ -186,6 +186,9 @@ External Services:
 ┌────────────────────────┐
 │   OpenStreetMap        │  → Map tiles for visualization
 └────────────────────────┘
+┌────────────────────────┐
+│   OSRM                 │  → Route calculation for batch tracking
+└────────────────────────┘
 ```
 
 **Data Flow:**
@@ -196,6 +199,7 @@ External Services:
 5. Data is returned through the stack back to the browser
 6. Frontend renders map markers and visualizations
 7. Map tiles are loaded from OpenStreetMap for geographic context
+8. For batch tracking, routes between checkpoints are calculated using OSRM (via backend proxy with caching)
 
 **Security:**
 - Databricks authentication for all API calls
@@ -215,6 +219,7 @@ External Services:
 ### Frontend
 - **Web application**: Cross-platform interface accessible from any browser
 - **Interactive maps**: OpenStreetMap integration with custom markers
+- **Route visualization**: OSRM (Open Source Routing Machine) for calculating driving routes between batch checkpoints
 - **RESTful API client**: HTTP-based communication with backend
 - **Responsive design**: Works on desktop, tablet, and mobile devices
 
@@ -223,6 +228,7 @@ External Services:
 - **Databricks Unity Catalog**: Data warehouse with governance and access control
 - **SQL Warehouse**: Compute engine for executing queries
 - **OpenStreetMap**: Map tile provider for geographic visualization
+- **OSRM**: Routing engine for calculating realistic road-based routes in batch tracking
 
 ## Development
 
