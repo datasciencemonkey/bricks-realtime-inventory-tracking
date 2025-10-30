@@ -1,4 +1,5 @@
 .env
 .env.template
 app.yaml
-deployment/
+deployment/*
+
