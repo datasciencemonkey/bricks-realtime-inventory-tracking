@@ -1,179 +1,228 @@
-# Supply Chain Tracker - Flutter Cross-Platform App
+# Real-Time Supply Chain Tracker
 
-A cross-platform Flutter application with FastAPI backend for real-time supply chain tracking and inventory monitoring.
+A real-time supply chain visibility application that provides interactive mapping and batch tracking for inventory monitoring across your distribution network. Built with Databricks as the data backbone and designed for deployment as a Databricks App.
 
-## Project Structure
+## What This Application Does
+
+This application provides **real-time visibility** into your supply chain operations with two primary capabilities:
+
+### 1. Live Inventory Dashboard
+- **Interactive map visualization** showing all inventory items with their current locations
+- **Color-coded status indicators** for quick identification of inventory state (In Transit, At DC, At Dock, etc.)
+- **Summary metrics** displaying total units and counts by status
+- **Drill-down capability** to view detailed information for each inventory item
+- **Filtering options** by product type and status
+
+### 2. Batch Tracking Timeline
+- **End-to-end tracking** of individual batches through the supply chain
+- **Event timeline** showing the complete journey from origin to destination
+- **Location history** with timestamps for every checkpoint
+- **Status updates** with notes for each stage of the journey
+- **Map visualization** of batch movement across geographic locations
+
+## Business Use Cases
+
+- **Supply chain managers** monitoring inventory flow across multiple distribution centers
+- **Logistics teams** tracking shipments in real-time
+- **Operations teams** identifying bottlenecks and delays
+- **Customer service** providing accurate delivery status updates
+- **Analytics teams** analyzing supply chain performance metrics
+
+## Architecture
 
 ```
 real-time-inventory-mobile/
-├── backend/                    # FastAPI backend
-│   ├── main.py                # API endpoints
+├── backend/                    # FastAPI Python backend
+│   ├── main.py                # REST API endpoints
 │   ├── requirements.txt       # Python dependencies
-│   └── .env.example          # Environment variables template
-└── supply_chain_tracker/      # Flutter app
-    ├── lib/
-    │   ├── models/            # Data models
-    │   ├── services/          # API service layer
-    │   ├── screens/           # UI screens
-    │   └── main.dart          # App entry point
-    └── pubspec.yaml           # Flutter dependencies
+│   └── .env.example           # Configuration template
+├── supply_chain_tracker/      # Web frontend application
+│   ├── lib/
+│   │   ├── models/            # Data models
+│   │   ├── services/          # API integration
+│   │   ├── screens/           # User interface screens
+│   │   └── providers/         # State management
+│   └── build/web/             # Production web assets
+└── deployment.sh              # Deployment automation script
 ```
 
-## Features
+**Technology Stack:**
+- **Backend**: FastAPI (Python) with Databricks SQL Connector
+- **Frontend**: Cross-platform web application
+- **Data Source**: Databricks Unity Catalog (SQL Warehouse)
+- **Deployment**: Databricks Apps
+- **Maps**: OpenStreetMap integration
 
-- **Real-time Inventory Map**: Interactive map showing inventory locations with status-based color coding
-- **Status Summary**: Dashboard with key metrics (In Transit, At DC, At Dock, Total Units)
-- **Cross-Platform**: Runs on iOS, Android, Web, Windows, macOS, and Linux
-- **RESTful API**: FastAPI backend with Databricks integration
-- **Modern UI**: Built with Material Design 3 and DM Sans font
+## Key Features
 
-## Backend Setup
+### Real-Time Data Integration
+- Direct connection to Databricks SQL Warehouse
+- Live queries against Unity Catalog tables
+- Sub-second data refresh for inventory status
+- RESTful API design for scalability
+
+### Visual Analytics
+- Geographic map view with inventory markers
+- Status-based color coding (8 distinct states)
+- Interactive tooltips with detailed information
+- Responsive design for desktop and mobile
+
+### Batch Tracking
+- Complete shipment history and audit trail
+- Multi-step journey visualization
+- Location-based tracking with coordinates
+- Notes and status updates at each checkpoint
+
+### Cross-Platform Access
+- Web-based interface accessible from any device
+- No installation required
+- Responsive design adapts to screen size
+- Works on desktop, tablet, and mobile browsers
+
+## Getting Started
 
 ### Prerequisites
-- Python 3.11+
-- Databricks account with access credentials
 
-### Installation
+This application requires access to a Databricks workspace and basic knowledge of Python for backend setup. The frontend is built with web technologies and requires no specialized development environment beyond standard development tools (Python, Node.js/npm for building web assets).
 
-1. Navigate to backend directory:
-```bash
-cd backend
-```
+## Application Screens and Functionality
 
-2. Create virtual environment:
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
+### Dashboard View
+The main dashboard provides an at-a-glance view of your entire supply chain:
+- **Summary cards** at the top show total units and counts by status
+- **Interactive map** displays all inventory locations as colored markers
+- **Filter panel** allows you to narrow down by product or status
+- **Real-time updates** as data changes in Databricks
 
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+### Inventory Screen
+The inventory screen shows detailed geographic distribution:
+- **Map markers** represent individual inventory items or aggregated locations
+- **Color coding** indicates status (red for in-transit, green for at DC, blue for at dock, etc.)
+- **Click on markers** to see detailed information including product, quantity, and last update
+- **Pan and zoom** to explore different geographic regions
 
-4. Configure environment:
-```bash
-cp .env.example .env
-# Edit .env with your Databricks credentials
-```
+### Batch Tracking Screen
+The batch tracking screen provides shipment-level detail:
+- **Batch selector** to choose which shipment to track
+- **Timeline view** showing chronological events from pickup to delivery
+- **Event cards** display location, status, timestamp, and notes for each checkpoint
+- **Map visualization** showing the path of the batch across locations
 
-5. Run the server:
-```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
+### Status Color Coding
 
-The API will be available at `http://localhost:8000`
-
-### API Endpoints
-
-- `GET /api/inventory` - Get all inventory items (with optional filters)
-- `GET /api/inventory/summary` - Get status summary statistics
-- `GET /api/products` - Get list of unique products
-- `GET /api/statuses` - Get list of unique statuses
-- `GET /api/batch/{batch_id}` - Get batch tracking events
-- `GET /api/batches` - Get list of all batches
-
-## Flutter App Setup
-
-### Prerequisites
-- Flutter SDK 3.9.2 or higher
-- Dart SDK
-- IDE (VS Code, Android Studio, or IntelliJ)
-
-### Installation
-
-1. Navigate to Flutter app directory:
-```bash
-cd supply_chain_tracker
-```
-
-2. Get dependencies:
-```bash
-flutter pub get
-```
-
-3. Update API URL:
-Edit `lib/services/api_service.dart` and update `baseUrl` to your backend URL:
-```dart
-static const String baseUrl = 'http://YOUR_BACKEND_IP:8000';
-```
-
-### Running the App
-
-**Desktop (macOS, Windows, Linux):**
-```bash
-flutter run -d macos    # macOS
-flutter run -d windows  # Windows
-flutter run -d linux    # Linux
-```
-
-**Mobile:**
-```bash
-flutter run -d ios      # iOS Simulator
-flutter run -d android  # Android Emulator
-```
-
-**Web:**
-```bash
-flutter run -d chrome
-```
-
-**Build for Production:**
-```bash
-flutter build apk       # Android APK
-flutter build ios       # iOS
-flutter build web       # Web
-flutter build macos     # macOS
-flutter build windows   # Windows
-flutter build linux     # Linux
-```
-
-## Configuration
-
-### Backend Environment Variables
-
-Create `.env` file in `backend/` directory:
-
-```env
-DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
-DATABRICKS_TOKEN=your_access_token
-DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/your_warehouse_id
-DATABRICKS_CATALOG=your_catalog
-DATABRICKS_SCHEMA=your_schema
-```
-
-### Flutter Configuration
-
-Update `lib/services/api_service.dart`:
-- For local testing: `http://localhost:8000`
-- For mobile device: `http://YOUR_LOCAL_IP:8000`
-- For production: `https://your-api-domain.com`
-
-## Status Color Coding
+The application uses color-coded markers to indicate inventory status at a glance:
 
 - **Red** (#e74c3c): In Transit
-- **Green** (#2ecc71): At DC
-- **Blue** (#3498db): At Dock
-- **Dark Green** (#27ae60): Delivered
 - **Orange** (#e67e22): In Transit from Supplier
 - **Dark Red** (#c0392b): In Transit to Customer
 - **Purple** (#9b59b6): In Transit to DC
+- **Green** (#2ecc71): At DC (Distribution Center)
+- **Blue** (#3498db): At Dock
 - **Teal** (#1abc9c): At the Dock
+- **Dark Green** (#27ae60): Delivered
+
+These colors help operations teams quickly identify where inventory is in the supply chain and spot potential issues (e.g., too many items stuck in transit).
+
+## System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         User's Browser                           │
+│                    (Web Interface - Any Device)                  │
+└────────────────────────────┬────────────────────────────────────┘
+                             │ HTTPS
+                             │
+┌────────────────────────────▼────────────────────────────────────┐
+│                      Databricks Apps                             │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │              Frontend (Web Application)                   │   │
+│  │  • Interactive map visualization                          │   │
+│  │  • Dashboard with status cards                            │   │
+│  │  • Batch tracking timeline                                │   │
+│  │  • Built with Flutter web                                 │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                             │                                    │
+│                             │ REST API (/api/*)                  │
+│                             │                                    │
+│  ┌──────────────────────────▼──────────────────────────────┐   │
+│  │              Backend (FastAPI)                            │   │
+│  │  • GET /api/inventory (list all inventory)               │   │
+│  │  • GET /api/inventory/summary (status counts)            │   │
+│  │  • GET /api/batch/{id} (batch tracking events)           │   │
+│  │  • GET /api/batches (list all batches)                   │   │
+│  │  • Python REST API with CORS enabled                      │   │
+│  └──────────────────────────┬──────────────────────────────┘   │
+│                              │                                   │
+└──────────────────────────────┼───────────────────────────────────┘
+                               │ SQL Connector
+                               │
+┌──────────────────────────────▼───────────────────────────────────┐
+│                    Databricks Workspace                          │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │                Unity Catalog                               │  │
+│  │  Catalog: supplychain                                      │  │
+│  │  Schema: supplychain_visibility                            │  │
+│  │                                                             │  │
+│  │  Tables:                                                    │  │
+│  │  ┌──────────────────────┐  ┌────────────────────────────┐ │  │
+│  │  │   inventory          │  │   batch_tracking           │ │  │
+│  │  │ • product_name       │  │ • batch_id                 │ │  │
+│  │  │ • status             │  │ • timestamp                │ │  │
+│  │  │ • latitude/longitude │  │ • location                 │ │  │
+│  │  │ • quantity           │  │ • status                   │ │  │
+│  │  │ • location           │  │ • latitude/longitude       │ │  │
+│  │  │ • last_updated       │  │ • notes                    │ │  │
+│  │  └──────────────────────┘  └────────────────────────────┘ │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                              ▲                                   │
+│  ┌───────────────────────────┴───────────────────────────────┐  │
+│  │            SQL Warehouse (Compute)                         │  │
+│  │  • Executes queries from backend                           │  │
+│  │  • Serverless or provisioned compute                       │  │
+│  └────────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────────┘
+
+External Services:
+┌────────────────────────┐
+│   OpenStreetMap        │  → Map tiles for visualization
+└────────────────────────┘
+```
+
+**Data Flow:**
+1. User opens the application in their browser
+2. Frontend loads and makes API calls to backend
+3. Backend queries Databricks SQL Warehouse via SQL Connector
+4. SQL Warehouse retrieves data from Unity Catalog tables
+5. Data is returned through the stack back to the browser
+6. Frontend renders map markers and visualizations
+7. Map tiles are loaded from OpenStreetMap for geographic context
+
+**Security:**
+- Databricks authentication for all API calls
+- Environment variables for sensitive credentials
+- CORS enabled for web access
+- All data stays within Databricks workspace
 
 ## Tech Stack
 
 ### Backend
-- **FastAPI**: Modern Python web framework
-- **Databricks SQL Connector**: Data source integration
-- **Pandas**: Data manipulation
-- **Uvicorn**: ASGI server
+- **FastAPI**: Modern Python web framework for building REST APIs
+- **Databricks SQL Connector**: Direct connection to Databricks SQL Warehouse
+- **Pandas**: Data manipulation and transformation
+- **Uvicorn**: ASGI server for running FastAPI
+- **Python-dotenv**: Environment variable management
 
 ### Frontend
-- **Flutter**: Cross-platform UI framework
-- **flutter_map**: Interactive map component
-- **http**: API communication
-- **google_fonts**: DM Sans typography
-- **provider**: State management (optional)
+- **Web application**: Cross-platform interface accessible from any browser
+- **Interactive maps**: OpenStreetMap integration with custom markers
+- **RESTful API client**: HTTP-based communication with backend
+- **Responsive design**: Works on desktop, tablet, and mobile devices
+
+### Infrastructure
+- **Databricks Apps**: Serverless deployment platform integrated with Databricks
+- **Databricks Unity Catalog**: Data warehouse with governance and access control
+- **SQL Warehouse**: Compute engine for executing queries
+- **OpenStreetMap**: Map tile provider for geographic visualization
 
 ## Development
 
