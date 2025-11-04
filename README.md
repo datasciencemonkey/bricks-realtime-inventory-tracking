@@ -1,32 +1,58 @@
 # Real-Time Supply Chain Tracker
 
-A real-time supply chain visibility application that provides interactive mapping and batch tracking for inventory monitoring across your distribution network. Built with Databricks as the data backbone and designed for deployment as a Databricks App.
+A comprehensive real-time supply chain visibility application featuring executive dashboards, interactive mapping, and batch tracking for inventory monitoring across your distribution network. Built with Flutter, FastAPI, and Databricks as the data backbone.
 
 ## What This Application Does
 
-This application provides **real-time visibility** into your supply chain operations with two primary capabilities:
+This application provides **real-time visibility** and **executive insights** into your supply chain operations with four primary capabilities:
 
-### 1. Live Inventory Dashboard
+### 1. Executive Dashboard
+- **5 Key Performance Indicators** with animated metrics:
+  - Total Inventory Value (calculated from real-time data)
+  - On-Time Delivery Rate
+  - On-Time in Full (OTIF) - dynamically calculated as OTDR - 3%
+  - Demand Forecast Accuracy
+  - Supplier Risk Score
+- **Demand Forecasting Chart** with last 6 months accuracy trends
+- **Inventory Levels by Status** - real-time value distribution across supply chain stages
+- **Supplier Performance Table** with sortable metrics and on-time delivery tracking
+- **Predictive Risk Analysis** identifying potential supply chain disruptions
+- **HyperText animations** for engaging metric displays
+- **Info tooltips** providing contextual information
+- **Responsive design** adapting to desktop, tablet, and mobile screens
+
+### 2. Live Inventory Dashboard
 - **Interactive map visualization** showing all inventory items with their current locations
 - **Color-coded status indicators** for quick identification of inventory state (In Transit, At DC, At Dock, etc.)
-- **Summary metrics** displaying total units and counts by status
+- **Summary metrics** displaying total units and dollar values
+- **Expected arrival times** shown on map tooltips
 - **Drill-down capability** to view detailed information for each inventory item
-- **Filtering options** by product type and status
+- **Advanced filtering** with searchable dropdowns for products and statuses
+- **Real-time data refresh** from Databricks
 
-### 2. Batch Tracking Timeline
+### 3. Batch Tracking Timeline
 - **End-to-end tracking** of individual batches through the supply chain
+- **Animated route visualization** on interactive maps
 - **Event timeline** showing the complete journey from origin to destination
 - **Location history** with timestamps for every checkpoint
 - **Status updates** with notes for each stage of the journey
-- **Map visualization** of batch movement across geographic locations
+- **Search-enabled selectors** for products and batches
+- **Gradient status cards** with visual animations
+
+### 4. Animated Landing Page
+- **Particle background effects** with interactive animations
+- **Text reveal animations** with chaos-style transitions
+- **Data pre-loading** for instant app experience
+- **Smooth transitions** to main application
 
 ## Business Use Cases
 
-- **Supply chain managers** monitoring inventory flow across multiple distribution centers
-- **Logistics teams** tracking shipments in real-time
-- **Operations teams** identifying bottlenecks and delays
+- **Executives** viewing high-level KPIs and supply chain health at a glance
+- **Supply chain managers** monitoring inventory flow and supplier performance
+- **Logistics teams** tracking shipments in real-time with ETA visibility
+- **Operations teams** identifying bottlenecks, delays, and risk factors
 - **Customer service** providing accurate delivery status updates
-- **Analytics teams** analyzing supply chain performance metrics
+- **Analytics teams** analyzing supply chain performance trends and forecasting accuracy
 
 ## Architecture
 
@@ -34,50 +60,83 @@ This application provides **real-time visibility** into your supply chain operat
 real-time-inventory-mobile/
 ├── backend/                    # FastAPI Python backend
 │   ├── main.py                # REST API endpoints
+│   ├── metrics.yaml           # Executive dashboard configuration
 │   ├── requirements.txt       # Python dependencies
 │   └── .env.example           # Configuration template
-├── supply_chain_tracker/      # Web frontend application
+├── supply_chain_tracker/      # Flutter web application
 │   ├── lib/
 │   │   ├── models/            # Data models
 │   │   ├── services/          # API integration
 │   │   ├── screens/           # User interface screens
-│   │   └── providers/         # State management
+│   │   │   ├── landing_page.dart
+│   │   │   ├── executive_dashboard_screen.dart
+│   │   │   ├── inventory_screen.dart
+│   │   │   ├── batch_tracking_screen.dart
+│   │   │   └── dashboard_screen.dart
+│   │   ├── widgets/           # Reusable UI components
+│   │   │   ├── hyper_text.dart
+│   │   │   ├── particle_background.dart
+│   │   │   ├── text_reveal_chaos.dart
+│   │   │   └── background_ripples.dart
+│   │   └── providers/         # Riverpod state management
 │   └── build/web/             # Production web assets
 └── deployment.sh              # Deployment automation script
 ```
 
 **Technology Stack:**
-- **Backend**: FastAPI (Python) with Databricks SQL Connector
-- **Frontend**: Cross-platform web application
+- **Backend**: FastAPI (Python) with Databricks SQL Connector, YAML configuration
+- **Frontend**: Flutter Web with shadcn_ui components, Google Fonts (DM Sans)
+- **Charts**: fl_chart for data visualization
+- **State Management**: Riverpod
 - **Data Source**: Databricks Unity Catalog (SQL Warehouse)
 - **Deployment**: Databricks Apps
-- **Maps**: OpenStreetMap integration
+- **Maps**: OpenStreetMap with flutter_map
 
 ## Key Features
+
+### Executive Insights
+- **Dynamic KPI calculations** with real-time data from Databricks
+- **OTIF metric** automatically calculated as OTDR - 3%
+- **Inventory value aggregation** from quantity × unit price
+- **Last 6 months trending** for demand forecasting and logistics
+- **Sortable tables** for supplier performance and risk analysis
+- **Responsive grid layouts** adapting to any screen size
+- **Animated metrics** with HyperText scrambling effects
 
 ### Real-Time Data Integration
 - Direct connection to Databricks SQL Warehouse
 - Live queries against Unity Catalog tables
 - Sub-second data refresh for inventory status
-- RESTful API design for scalability
+- RESTful API design with caching (5-minute TTL)
+- Riverpod state management for efficient data flow
+- Pre-loading and background data refresh
 
 ### Visual Analytics
 - Geographic map view with inventory markers
 - Status-based color coding (8 distinct states)
 - Interactive tooltips with detailed information
-- Responsive design for desktop and mobile
+- Bar and line charts with fl_chart library
+- Value labels on chart bars
+- Grid-less chart design for modern aesthetics
+- Responsive design for desktop, tablet, and mobile
 
 ### Batch Tracking
 - Complete shipment history and audit trail
+- Animated route visualization with polylines
 - Multi-step journey visualization
 - Location-based tracking with coordinates
 - Notes and status updates at each checkpoint
+- Search-enabled product and batch selectors
 
-### Cross-Platform Access
+### User Experience
+- Animated landing page with particle effects
+- Text reveal animations with chaos transitions
 - Web-based interface accessible from any device
 - No installation required
-- Responsive design adapts to screen size
-- Works on desktop, tablet, and mobile browsers
+- DM Sans font throughout application
+- Custom truck icon favicon
+- Dark and light mode support
+- Smooth transitions and loading states
 
 ## Getting Started
 
