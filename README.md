@@ -146,26 +146,46 @@ This application requires access to a Databricks workspace and basic knowledge o
 
 ## Application Screens and Functionality
 
-### Dashboard View
-The main dashboard provides an at-a-glance view of your entire supply chain:
-- **Summary cards** at the top show total units and counts by status
-- **Interactive map** displays all inventory locations as colored markers
-- **Filter panel** allows you to narrow down by product or status
-- **Real-time updates** as data changes in Databricks
+### Landing Page
+The animated entry point to the application:
+- **Particle background** with interactive floating particles
+- **Text reveal animations** with chaos-style character transitions
+- **Data pre-loading** occurs in the background for instant app access
+- **Launch button** appears after animation completes and data is ready
+
+### Executive Dashboard
+The strategic view for leadership and management:
+- **5 KPI cards** displayed responsively across the top:
+  - Total Inventory Value (real-time calculation)
+  - On-Time Delivery Rate
+  - On-Time in Full (OTIF) - calculated dynamically
+  - Demand Forecast Accuracy
+  - Supplier Risk Score with color-coded risk levels
+- **Demand Forecasting** - Line chart showing last 6 months accuracy trends
+- **Inventory Levels by Status** - Bar chart displaying value distribution
+- **Supplier Performance** - Sortable table with on-time delivery metrics
+- **Predictive Risk Analysis** - Table identifying potential disruptions
+- **Info tooltips** provide context for each section
+- **Animated metrics** using HyperText scrambling effects
 
 ### Inventory Screen
-The inventory screen shows detailed geographic distribution:
+The operational view showing detailed geographic distribution:
 - **Map markers** represent individual inventory items or aggregated locations
 - **Color coding** indicates status (red for in-transit, green for at DC, blue for at dock, etc.)
+- **Expected arrival times** shown on tooltips for in-transit items
+- **Searchable filters** for products and statuses
+- **Summary card** showing total shipments for current filter
 - **Click on markers** to see detailed information including product, quantity, and last update
 - **Pan and zoom** to explore different geographic regions
 
 ### Batch Tracking Screen
-The batch tracking screen provides shipment-level detail:
-- **Batch selector** to choose which shipment to track
+The shipment-level detail view:
+- **Search-enabled selectors** for products and batches
+- **Animated route visualization** on the map with polylines
 - **Timeline view** showing chronological events from pickup to delivery
+- **Gradient status cards** with visual appeal and animations
 - **Event cards** display location, status, timestamp, and notes for each checkpoint
-- **Map visualization** showing the path of the batch across locations
+- **Map visualization** showing the complete path of the batch
 
 ### Status Color Coding
 
@@ -207,9 +227,12 @@ These colors help operations teams quickly identify where inventory is in the su
 │  │              Backend (FastAPI)                            │   │
 │  │  • GET /api/inventory (list all inventory)               │   │
 │  │  • GET /api/inventory/summary (status counts)            │   │
+│  │  • GET /api/dashboard/executive (KPIs and charts)        │   │
+│  │  • GET /api/products (list all products)                 │   │
+│  │  • GET /api/statuses (list all statuses)                 │   │
 │  │  • GET /api/batch/{id} (batch tracking events)           │   │
 │  │  • GET /api/batches (list all batches)                   │   │
-│  │  • Python REST API with CORS enabled                      │   │
+│  │  • Python REST API with CORS and caching                 │   │
 │  └──────────────────────────┬──────────────────────────────┘   │
 │                              │                                   │
 └──────────────────────────────┼───────────────────────────────────┘
@@ -271,14 +294,20 @@ External Services:
 ### Backend
 - **FastAPI**: Modern Python web framework for building REST APIs
 - **Databricks SQL Connector**: Direct connection to Databricks SQL Warehouse
+- **PyYAML**: Configuration management for dashboard metrics
 - **Pandas**: Data manipulation and transformation
 - **Uvicorn**: ASGI server for running FastAPI
 - **Python-dotenv**: Environment variable management
+- **LRU Cache**: In-memory caching with TTL for performance
 
 ### Frontend
-- **Web application**: Cross-platform interface accessible from any browser
-- **Interactive maps**: OpenStreetMap integration with custom markers
-- **Route visualization**: OSRM (Open Source Routing Machine) for calculating driving routes between batch checkpoints
+- **Flutter Web**: Cross-platform web framework with rich UI components
+- **shadcn_ui**: Modern UI component library
+- **flutter_map**: Interactive maps with OpenStreetMap integration
+- **fl_chart**: Beautiful and customizable charts (bar, line, etc.)
+- **Riverpod**: State management for reactive data flow
+- **Google Fonts**: DM Sans typography throughout
+- **Route visualization**: OSRM (Open Source Routing Machine) for calculating driving routes
 - **RESTful API client**: HTTP-based communication with backend
 - **Responsive design**: Works on desktop, tablet, and mobile devices
 
@@ -294,11 +323,25 @@ External Services:
 ### Backend Development
 ```bash
 cd backend
-uvicorn main:app --reload
+uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Flutter Hot Reload
-When running the app, press `r` in terminal for hot reload, or `R` for hot restart.
+### Frontend Development
+```bash
+cd supply_chain_tracker
+flutter run -d chrome
+```
+
+### Building for Production
+```bash
+cd supply_chain_tracker
+flutter build web
+```
+
+### Configuration
+- Backend metrics are configured in `backend/metrics.yaml`
+- KPIs, charts, and risk analysis can be customized without code changes
+- Real-time calculations override YAML defaults for inventory and OTIF metrics
 
 ## Troubleshooting
 
