@@ -24,6 +24,8 @@ class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
   bool _isLoading = true;
   bool _eventsLoading = false;
   List<LatLng> _routeCoordinates = [];
+  String _productSearchValue = '';
+  String _batchSearchValue = '';
 
   // Animation state
   bool _isAnimating = false;
@@ -41,10 +43,25 @@ class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
       ..sort();
   }
 
+  List<String> get _filteredProductNames {
+    if (_productSearchValue.isEmpty) return _productNames;
+    return _productNames
+        .where((name) =>
+            name.toLowerCase().contains(_productSearchValue.toLowerCase()))
+        .toList();
+  }
+
   List<Map<String, dynamic>> get _filteredBatches {
     if (_selectedProductName == null) return _batches;
-    return _batches
+    var batches = _batches
         .where((b) => b['product_name'] == _selectedProductName)
+        .toList();
+
+    if (_batchSearchValue.isEmpty) return batches;
+    return batches
+        .where((b) => (b['batch_id'] as String)
+            .toLowerCase()
+            .contains(_batchSearchValue.toLowerCase()))
         .toList();
   }
 
@@ -279,11 +296,30 @@ class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
                   children: [
                     Text('Product', style: ShadTheme.of(context).textTheme.small),
                     const SizedBox(height: 4),
-                    ShadSelect<String>(
-                      placeholder: const Text('Select product'),
-                      options: _productNames
-                          .map((name) => ShadOption(value: name, child: Text(name)))
-                          .toList(),
+                    ShadSelect<String>.withSearch(
+                      minWidth: 180,
+                      placeholder: const Text('Select product...'),
+                      onSearchChanged: (value) =>
+                          setState(() => _productSearchValue = value),
+                      searchPlaceholder: const Text('Search products'),
+                      options: [
+                        if (_filteredProductNames.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 24),
+                            child: Text('No products found'),
+                          ),
+                        ..._productNames.map(
+                          (name) {
+                            return Offstage(
+                              offstage: !_filteredProductNames.contains(name),
+                              child: ShadOption(
+                                value: name,
+                                child: Text(name),
+                              ),
+                            );
+                          },
+                        )
+                      ],
                       selectedOptionBuilder: (context, value) => Text(value),
                       onChanged: (value) {
                         if (mounted) {
@@ -307,15 +343,35 @@ class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
                   children: [
                     Text('Batch', style: ShadTheme.of(context).textTheme.small),
                     const SizedBox(height: 4),
-                    ShadSelect<String>(
-                      placeholder: const Text('Select batch'),
+                    ShadSelect<String>.withSearch(
+                      minWidth: 180,
+                      placeholder: const Text('Select batch...'),
                       enabled: _selectedProductName != null,
-                      options: _filteredBatches
-                          .map((batch) => ShadOption(
-                                value: batch['batch_id'] as String,
-                                child: Text(batch['batch_id'] as String),
-                              ))
-                          .toList(),
+                      onSearchChanged: (value) =>
+                          setState(() => _batchSearchValue = value),
+                      searchPlaceholder: const Text('Search batches'),
+                      options: [
+                        if (_selectedProductName != null && _filteredBatches.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 24),
+                            child: Text('No batches found'),
+                          ),
+                        ..._batches
+                            .where((b) => b['product_name'] == _selectedProductName)
+                            .map(
+                          (batch) {
+                            final batchId = batch['batch_id'] as String;
+                            return Offstage(
+                              offstage: !_filteredBatches
+                                  .any((b) => b['batch_id'] == batchId),
+                              child: ShadOption(
+                                value: batchId,
+                                child: Text(batchId),
+                              ),
+                            );
+                          },
+                        )
+                      ],
                       selectedOptionBuilder: (context, value) => Text(value),
                       onChanged: (value) {
                         if (mounted) {
@@ -362,8 +418,8 @@ class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            AppColors.sunriseOrange.withOpacity(0.9),
-            AppColors.goldenHarvest.withOpacity(0.8),
+            AppColors.sunriseOrange.withValues(alpha: 0.9),
+            AppColors.goldenHarvest.withValues(alpha: 0.8),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -371,7 +427,7 @@ class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: AppColors.sunriseOrange.withOpacity(0.5),
+            color: AppColors.sunriseOrange.withValues(alpha: 0.5),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -382,7 +438,7 @@ class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.3),
+              color: Colors.white.withValues(alpha: 0.3),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -509,7 +565,7 @@ class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
               Polyline(
                 points: _routeCoordinates,
                 strokeWidth: 8.0,
-                color: Colors.black.withOpacity(0.3),
+                color: Colors.black.withValues(alpha: 0.3),
               ),
               // Main route line
               Polyline(
@@ -559,7 +615,7 @@ class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
                   border: Border.all(color: Colors.white, width: 4),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.5),
+                      color: Colors.black.withValues(alpha: 0.5),
                       blurRadius: 12,
                       spreadRadius: 2,
                       offset: const Offset(0, 2),
@@ -590,10 +646,10 @@ class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.black.withOpacity(0.3), width: 1),
+                  border: Border.all(color: Colors.black.withValues(alpha: 0.3), width: 1),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.4),
+                      color: Colors.black.withValues(alpha: 0.4),
                       blurRadius: 6,
                       spreadRadius: 1,
                     ),
@@ -631,7 +687,7 @@ class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: AppColors.sunriseOrange.withOpacity(0.6),
+              color: AppColors.sunriseOrange.withValues(alpha: 0.6),
               blurRadius: 20,
               spreadRadius: 5,
             ),

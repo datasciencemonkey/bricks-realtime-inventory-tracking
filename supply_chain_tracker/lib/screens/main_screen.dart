@@ -4,6 +4,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import '../providers/theme_provider.dart';
 import 'inventory_screen.dart';
 import 'batch_tracking_screen.dart';
+import 'executive_dashboard_screen.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
   const MainScreen({super.key});
@@ -84,15 +85,21 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             child: Row(
               children: [
                 _buildTab(
-                  icon: Icons.inventory_2_rounded,
-                  label: 'Real-time Inventory',
+                  icon: Icons.dashboard_rounded,
+                  label: 'Executive Dashboard',
                   index: 0,
                 ),
                 const SizedBox(width: 8),
                 _buildTab(
-                  icon: Icons.route_rounded,
-                  label: 'Batch Tracking',
+                  icon: Icons.inventory_2_rounded,
+                  label: 'Real-time Snapshot',
                   index: 1,
+                ),
+                const SizedBox(width: 8),
+                _buildTab(
+                  icon: Icons.route_rounded,
+                  label: 'Shipment Tracking',
+                  index: 2,
                 ),
               ],
             ),
@@ -102,6 +109,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             child: IndexedStack(
               index: _selectedIndex,
               children: const [
+                ExecutiveDashboardScreen(),
                 InventoryScreen(),
                 BatchTrackingScreen(),
               ],

@@ -92,26 +92,67 @@ final filteredInventoryProvider = Provider<List<InventoryItem>>((ref) {
   );
 });
 
+// Products list provider (fetched directly from API)
+final productsListProvider = FutureProvider<List<String>>((ref) async {
+  final apiService = ref.watch(apiServiceProvider);
+  return await apiService.getProducts();
+});
+
+// Statuses list provider (fetched directly from API)
+final statusesListProvider = FutureProvider<List<String>>((ref) async {
+  final apiService = ref.watch(apiServiceProvider);
+  return await apiService.getStatuses();
+});
+
 // Available products provider
 final availableProductsProvider = Provider<List<String>>((ref) {
   final inventory = ref.watch(inventoryProvider);
-  return inventory.when(
-    data: (items) {
-      return items.map((i) => i.productName).toSet().toList()..sort();
-    },
-    loading: () => [],
-    error: (_, __) => [],
+  final productsList = ref.watch(productsListProvider);
+  
+  // Prefer products from API, fallback to inventory
+  return productsList.when(
+    data: (products) => products,
+    loading: () => inventory.when(
+      data: (items) => items.map((i) => i.productName).toSet().toList()..sort(),
+      loading: () => [],
+      error: (_, __) => [],
+    ),
+    error: (_, __) => inventory.when(
+      data: (items) => items.map((i) => i.productName).toSet().toList()..sort(),
+      loading: () => [],
+      error: (_, __) => [],
+    ),
   );
 });
 
 // Available statuses provider
 final availableStatusesProvider = Provider<List<String>>((ref) {
   final inventory = ref.watch(inventoryProvider);
-  return inventory.when(
-    data: (items) {
-      return items.map((i) => i.status).toSet().toList()..sort();
-    },
-    loading: () => [],
-    error: (_, __) => [],
+  final statusesList = ref.watch(statusesListProvider);
+  
+  // Prefer statuses from API, fallback to inventory
+  return statusesList.when(
+    data: (statuses) => statuses,
+    loading: () => inventory.when(
+      data: (items) => items.map((i) => i.status).toSet().toList()..sort(),
+      loading: () => [],
+      error: (_, __) => [],
+    ),
+    error: (_, __) => inventory.when(
+      data: (items) => items.map((i) => i.status).toSet().toList()..sort(),
+      loading: () => [],
+      error: (_, __) => [],
+    ),
   );
+});
+
+// Pre-fetch provider to warm up all data
+final prefetchDataProvider = FutureProvider<void>((ref) async {
+  // Pre-fetch all data in parallel
+  await Future.wait([
+    ref.read(inventoryProvider.future),
+    ref.read(inventorySummaryProvider.future),
+    ref.read(productsListProvider.future),
+    ref.read(statusesListProvider.future),
+  ]);
 });

@@ -186,7 +186,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             return CircleMarker(
               point: LatLng(item.latitude, item.longitude),
               radius: 8,
-              color: _getStatusColor(item.status).withOpacity(0.8),
+              color: _getStatusColor(item.status).withValues(alpha: 0.8),
               borderColor: _getStatusColor(item.status),
               borderStrokeWidth: 2,
             );

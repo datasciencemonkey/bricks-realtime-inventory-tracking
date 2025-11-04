@@ -9,6 +9,32 @@ class ApiService {
   // Update this with your FastAPI backend URL
   static const String baseUrl = 'http://localhost:8000';
 
+  // Cache storage
+  static List<Map<String, dynamic>>? _batchesCache;
+  static List<String>? _productsCache;
+  static DateTime? _batchesCacheTime;
+  static DateTime? _productsCacheTime;
+  static const Duration _cacheDuration = Duration(minutes: 5);
+
+  // Preload cache on app startup
+  static Future<void> preloadCache() async {
+    final apiService = ApiService();
+    try {
+      await Future.wait([
+        apiService.getBatches(useCache: false),
+        apiService.getProducts(useCache: false),
+      ]);
+    } catch (e) {
+      // Silently fail preload, data will load on demand
+      print('Cache preload failed: $e');
+    }
+  }
+
+  bool _isCacheValid(DateTime? cacheTime) {
+    if (cacheTime == null) return false;
+    return DateTime.now().difference(cacheTime) < _cacheDuration;
+  }
+
   Future<List<InventoryItem>> getInventory({
     String? product,
     String? status,
@@ -44,12 +70,23 @@ class ApiService {
     }
   }
 
-  Future<List<String>> getProducts() async {
+  Future<List<String>> getProducts({bool useCache = true}) async {
+    // Check cache first
+    if (useCache && _isCacheValid(_productsCacheTime) && _productsCache != null) {
+      return _productsCache!;
+    }
+
     final response = await http.get(Uri.parse('$baseUrl/api/products'));
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
-      return List<String>.from(data['products']);
+      final products = List<String>.from(data['products']);
+
+      // Update cache
+      _productsCache = products;
+      _productsCacheTime = DateTime.now();
+
+      return products;
     } else {
       throw Exception('Failed to load products');
     }
@@ -77,12 +114,23 @@ class ApiService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> getBatches() async {
+  Future<List<Map<String, dynamic>>> getBatches({bool useCache = true}) async {
+    // Check cache first
+    if (useCache && _isCacheValid(_batchesCacheTime) && _batchesCache != null) {
+      return _batchesCache!;
+    }
+
     final response = await http.get(Uri.parse('$baseUrl/api/batches'));
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
-      return List<Map<String, dynamic>>.from(data['batches']);
+      final batches = List<Map<String, dynamic>>.from(data['batches']);
+
+      // Update cache
+      _batchesCache = batches;
+      _batchesCacheTime = DateTime.now();
+
+      return batches;
     } else {
       throw Exception('Failed to load batches');
     }

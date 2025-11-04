@@ -1,20 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:intl/intl.dart';
 import '../models/inventory_item.dart';
 import '../models/status_summary.dart';
 import '../services/api_service.dart';
+import '../providers/inventory_provider.dart';
 
-class InventoryScreen extends StatefulWidget {
+class InventoryScreen extends ConsumerStatefulWidget {
   const InventoryScreen({super.key});
 
   @override
-  State<InventoryScreen> createState() => _InventoryScreenState();
+  ConsumerState<InventoryScreen> createState() => _InventoryScreenState();
 }
 
-class _InventoryScreenState extends State<InventoryScreen> {
+class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   final ApiService _apiService = ApiService();
   List<InventoryItem> _allInventory = [];
   List<InventoryItem> _filteredInventory = [];
@@ -47,23 +50,66 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   Future<void> _loadData() async {
-    if (mounted) {
+    // Check if data is already cached in Riverpod providers
+    final inventoryState = ref.read(inventoryProvider);
+    final summaryState = ref.read(inventorySummaryProvider);
+    final productsState = ref.read(productsListProvider);
+    final statusesState = ref.read(statusesListProvider);
+
+    // If data is already available, use it immediately
+    bool hasCachedData = false;
+    if (inventoryState.hasValue && summaryState.hasValue && 
+        productsState.hasValue && statusesState.hasValue) {
+      try {
+        final inventory = inventoryState.value!;
+        final summary = summaryState.value!;
+        final products = productsState.value!;
+        final statuses = statusesState.value!
+            .where((s) => s.toLowerCase() != 'delivered')
+            .toList();
+
+        if (mounted) {
+          setState(() {
+            _allInventory = inventory;
+            _availableProducts = products;
+            _availableStatuses = statuses;
+            _selectedProducts = [];
+            _selectedStatuses = [];
+            _filteredInventory = inventory;
+            _summary = summary;
+            _isLoading = false;
+          });
+          hasCachedData = true;
+        }
+      } catch (e) {
+        // If cached data has issues, fall through to load fresh data
+      }
+    }
+
+    // Only show loader if we don't have cached data
+    if (!hasCachedData && mounted) {
       setState(() => _isLoading = true);
     }
+
+    // Always refresh data in background to ensure it's up to date
     try {
       final inventory = await _apiService.getInventory();
       final summary = await _apiService.getInventorySummary();
       final products = await _apiService.getProducts();
-      final statuses = await _apiService.getStatuses();
+      final statuses = (await _apiService.getStatuses())
+          .where((s) => s.toLowerCase() != 'delivered')
+          .toList();
 
       if (mounted) {
         setState(() {
           _allInventory = inventory;
           _availableProducts = products;
           _availableStatuses = statuses;
-          _selectedProducts = []; // Start with none selected
-          _selectedStatuses = []; // Start with none selected
-          _filteredInventory = inventory;
+          if (_selectedProducts.isEmpty && _selectedStatuses.isEmpty) {
+            _filteredInventory = inventory;
+          } else {
+            _applyFilters();
+          }
           _summary = summary;
           _isLoading = false;
         });
@@ -117,131 +163,125 @@ class _InventoryScreenState extends State<InventoryScreen> {
   Widget _buildFilters() {
     return Container(
       padding: const EdgeInsets.all(16),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _buildMultiSelect(
-                  label: 'Filter by Product',
-                  items: _availableProducts,
-                  selectedItems: _selectedProducts,
-                  onChanged: (values) {
-                    setState(() {
-                      _selectedProducts = values;
-                      _applyFilters();
-                    });
-                  },
-                ),
-              ),
-              const SizedBox(width: 16),
-              ShadCard(
-                backgroundColor: const Color(0xFF6DB144),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Total Shipments',
-                      style: TextStyle(color: Colors.white, fontSize: 12),
-                    ),
-                    Text(
-                      '${_filteredInventory.length}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          Expanded(
+            child: _buildProductFilter(),
           ),
-          const SizedBox(height: 12),
-          _buildMultiSelect(
-            label: 'Filter by Status',
-            items: _availableStatuses,
-            selectedItems: _selectedStatuses,
-            onChanged: (values) {
-              setState(() {
-                _selectedStatuses = values;
-                _applyFilters();
-              });
-            },
+          const SizedBox(width: 16),
+          Expanded(
+            child: _buildStatusFilter(),
+          ),
+          const SizedBox(width: 16),
+          ShadCard(
+            backgroundColor: const Color(0xFF6DB144),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                const Text(
+                  'Total Shipments',
+                  style: TextStyle(color: Colors.white, fontSize: 12),
+                ),
+                Text(
+                  '${_filteredInventory.length}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildMultiSelect({
-    required String label,
-    required List<String> items,
-    required List<String> selectedItems,
-    required Function(List<String>) onChanged,
-  }) {
-    final allSelected = selectedItems.length == items.length;
-
+  Widget _buildProductFilter() {
+    final theme = ShadTheme.of(context);
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 12, bottom: 4),
+          padding: const EdgeInsets.only(left: 12, bottom: 8),
           child: Text(
-            label,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            'Filter by Product',
+            style: theme.textTheme.small.copyWith(
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
-        Container(
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.withOpacity(0.3)),
-            borderRadius: BorderRadius.circular(8),
+        ShadSelect<String>.multiple(
+          minWidth: 300,
+          allowDeselection: true,
+          closeOnSelect: false,
+          placeholder: const Text('Select products...'),
+          options: _availableProducts
+              .map((product) => ShadOption(value: product, child: Text(product)))
+              .toList(),
+          selectedOptionsBuilder: (context, values) {
+            if (values.isEmpty) {
+              return const Text('Select products...');
+            }
+            return Text(
+              values.length == _availableProducts.length
+                  ? 'All products (${values.length})'
+                  : '${values.length} product${values.length == 1 ? '' : 's'} selected',
+            );
+          },
+          onChanged: (values) {
+            setState(() {
+              _selectedProducts = values.toList();
+              _applyFilters();
+            });
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatusFilter() {
+    final theme = ShadTheme.of(context);
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 12, bottom: 8),
+          child: Text(
+            'Filter by Status',
+            style: theme.textTheme.small.copyWith(
+              fontWeight: FontWeight.w500,
+            ),
           ),
-          padding: const EdgeInsets.all(8),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.start,
-            alignment: WrapAlignment.start,
-            children: [
-              // Select All button
-              ActionChip(
-                label: Text(allSelected ? 'Select All (${items.length})' : 'Select All'),
-                backgroundColor: allSelected ? Colors.blue.withOpacity(0.2) : null,
-                onPressed: () => onChanged(List.from(items)),
-              ),
-              // Clear All button
-              ActionChip(
-                label: const Text('Clear All'),
-                onPressed: () => onChanged([]),
-              ),
-              // Show count if some selected
-              if (selectedItems.isNotEmpty && !allSelected)
-                Chip(
-                  label: Text('${selectedItems.length} selected'),
-                  backgroundColor: Colors.grey.withOpacity(0.2),
-                ),
-              // Individual filter chips for each item
-              ...items.map((item) {
-                final isSelected = selectedItems.contains(item);
-                return FilterChip(
-                  label: Text(item),
-                  selected: isSelected,
-                  onSelected: (selected) {
-                    List<String> newSelection = List.from(selectedItems);
-                    if (selected) {
-                      newSelection.add(item);
-                    } else {
-                      newSelection.remove(item);
-                    }
-                    onChanged(newSelection);
-                  },
-                );
-              }),
-            ],
-          ),
+        ),
+        ShadSelect<String>.multiple(
+          minWidth: 300,
+          allowDeselection: true,
+          closeOnSelect: false,
+          placeholder: const Text('Select statuses...'),
+          options: _availableStatuses
+              .map((status) => ShadOption(value: status, child: Text(status)))
+              .toList(),
+          selectedOptionsBuilder: (context, values) {
+            if (values.isEmpty) {
+              return const Text('Select statuses...');
+            }
+            return Text(
+              values.length == _availableStatuses.length
+                  ? 'All statuses (${values.length})'
+                  : '${values.length} status${values.length == 1 ? '' : 'es'} selected',
+            );
+          },
+          onChanged: (values) {
+            setState(() {
+              _selectedStatuses = values.toList();
+              _applyFilters();
+            });
+          },
         ),
       ],
     );
@@ -253,6 +293,23 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final atDc = _filteredInventory.where((item) => item.statusCategory == 'At DC').length;
     final atDock = _filteredInventory.where((item) => item.statusCategory == 'At Dock').length;
     final totalUnits = _filteredInventory.fold<int>(0, (sum, item) => sum + item.qty);
+
+    // Calculate total dollar value (qty * unit_price)
+    final totalValue = _filteredInventory.fold<double>(
+      0.0,
+      (sum, item) => sum + (item.qty * item.unitPrice),
+    );
+
+    // Format total value (e.g., $1.2M, $850K, or $1,234)
+    String formatValue(double value) {
+      if (value >= 1000000) {
+        return '\$${(value / 1000000).toStringAsFixed(1)}M';
+      } else if (value >= 1000) {
+        return '\$${(value / 1000).toStringAsFixed(0)}K';
+      } else {
+        return '\$${value.toStringAsFixed(0)}';
+      }
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -278,8 +335,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
           const SizedBox(width: 8),
           _buildSummaryCard(
             '📊 Total Units',
-            totalUnits.toString(),
+            NumberFormat('#,###').format(totalUnits),
             const Color(0xFF6DB144),
+          ),
+          const SizedBox(width: 8),
+          _buildSummaryCard(
+            '💰 Total Value',
+            formatValue(totalValue),
+            const Color(0xFF9b59b6),
           ),
         ],
       ),
@@ -414,12 +477,28 @@ class _InventoryScreenState extends State<InventoryScreen> {
             }
             final dominantStatus = statusCounts.entries.reduce((a, b) => a.value > b.value ? a : b).key;
 
+            // Check if any items have expected arrival time
+            final itemsWithETA = items.where((item) => item.expectedArrivalTime != null && item.expectedArrivalTime!.isNotEmpty).toList();
+            String? etaInfo;
+            if (itemsWithETA.isNotEmpty) {
+              // Show the earliest ETA if multiple items have ETA
+              final etas = itemsWithETA.map((item) => item.expectedArrivalTime!).toList();
+              etas.sort();
+              etaInfo = 'ETA: ${etas.first}';
+            }
+
+            // Build tooltip message
+            String tooltipMessage = '$location\n$totalShipments shipments\n$totalQty units\n$dominantStatus';
+            if (etaInfo != null) {
+              tooltipMessage += '\n$etaInfo';
+            }
+
             return Marker(
               point: LatLng(firstItem.latitude, firstItem.longitude),
               width: 20,
               height: 20,
               child: Tooltip(
-                message: '$location\n$totalShipments shipments\n$totalQty units\n$dominantStatus',
+                message: tooltipMessage,
                 decoration: BoxDecoration(
                   color: Colors.black87,
                   borderRadius: BorderRadius.circular(8),
@@ -427,12 +506,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 textStyle: const TextStyle(
                   color: Colors.white,
                   fontSize: 12,
+                  height: 1.4,
                 ),
                 child: Container(
                   width: 16,
                   height: 16,
                   decoration: BoxDecoration(
-                    color: _getStatusColor(dominantStatus).withOpacity(0.8),
+                    color: _getStatusColor(dominantStatus).withValues(alpha: 0.8),
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: _getStatusColor(dominantStatus),
@@ -440,7 +520,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
+                        color: Colors.black.withValues(alpha: 0.3),
                         blurRadius: 4,
                         offset: const Offset(0, 2),
                       ),
