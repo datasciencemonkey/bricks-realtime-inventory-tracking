@@ -6,8 +6,12 @@ import '../models/batch_event.dart';
 import 'package:latlong2/latlong.dart';
 
 class ApiService {
-  // Update this with your FastAPI backend URL
-  static const String baseUrl = 'http://localhost:8000';
+  // Use relative URL for Databricks Apps deployment, localhost for development
+  static String get baseUrl {
+    // In web deployment, use relative URLs (empty string means same origin)
+    // This works for both Databricks Apps and local development with proxy
+    return '';
+  }
 
   // Cache storage
   static List<Map<String, dynamic>>? _batchesCache;
