@@ -50,6 +50,10 @@ dependencies:
   google_fonts: ^6.1.0
   shadcn_ui: ^0.38.5
 
+  # Charts and graphs
+  fl_chart: ^0.69.0
+  flutter_advanced_table: ^1.1.2
+
   # Persistence
   shared_preferences: ^2.2.2
 

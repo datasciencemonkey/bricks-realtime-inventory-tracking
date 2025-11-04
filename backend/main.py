@@ -11,6 +11,7 @@ from databricks import sql
 import pandas as pd
 from datetime import datetime, timedelta
 from functools import lru_cache
+import yaml
 
 # Load environment variables
 load_dotenv()
@@ -316,6 +317,171 @@ def clear_cache_endpoint():
     """Clear all cache entries"""
     clear_cache()
     return {"message": "Cache cleared successfully"}
+
+@app.get("/api/dashboard/executive")
+def get_executive_dashboard():
+    """Get executive dashboard metrics from metrics.yaml with dynamic date adjustments"""
+    metrics_path = Path(__file__).parent / "metrics.yaml"
+
+    try:
+        with open(metrics_path, 'r') as f:
+            metrics = yaml.safe_load(f)
+
+        dashboard = metrics.get('executive_dashboard', {})
+
+        # Calculate total inventory value from actual data
+        catalog = os.getenv("DATABRICKS_CATALOG", "")
+        schema = os.getenv("DATABRICKS_SCHEMA", "")
+        table_name = "inventory_realtime_v1"
+        if catalog and schema:
+            table_name = f"{catalog}.{schema}.{table_name}"
+
+        try:
+            query = f"SELECT qty, unit_price FROM {table_name}"
+            df = get_databricks_data(query, cache_key="inventory_value_calc", ttl_seconds=300)
+
+            # Calculate total value (qty * unit_price)
+            total_value = (df['qty'] * df['unit_price']).sum()
+
+            # Format as millions with 1 decimal place
+            total_value_millions = round(total_value / 1_000_000, 1)
+
+            # Update the KPI card for total inventory value
+            if 'kpi_cards' in dashboard and len(dashboard['kpi_cards']) > 0:
+                # Find and update the Total Inventory Value card (usually first one)
+                for card in dashboard['kpi_cards']:
+                    if card.get('id') == 'total_inventory_value':
+                        card['value'] = total_value_millions
+                        break
+        except Exception as e:
+            # If calculation fails, keep the default value from YAML
+            print(f"Error calculating inventory value: {e}")
+            pass
+
+        # Calculate OTIF (On-Time in Full) - 3% below On-Time Delivery Rate
+        if 'kpi_cards' in dashboard:
+            on_time_delivery_rate = None
+
+            # Find the On-Time Delivery Rate value
+            for card in dashboard['kpi_cards']:
+                if card.get('id') == 'on_time_delivery_rate':
+                    on_time_delivery_rate = card.get('value', 95)
+                    break
+
+            if on_time_delivery_rate is not None:
+                # Calculate OTIF as 3% below OTDR
+                otif_value = on_time_delivery_rate - 3
+
+                # Update the OTIF card
+                for card in dashboard['kpi_cards']:
+                    if card.get('id') == 'otif':
+                        card['value'] = otif_value
+                        break
+
+        # Update inventory levels based on real-time data
+        try:
+            query = f"SELECT status, qty, unit_price FROM {table_name}"
+            df = get_databricks_data(query, cache_key="inventory_levels_calc", ttl_seconds=300)
+
+            # Calculate inventory by status
+            inventory_by_status = {}
+            for status in df['status'].unique():
+                status_df = df[df['status'] == status]
+                total_value = (status_df['qty'] * status_df['unit_price']).sum()
+                inventory_by_status[status] = total_value / 1_000_000  # Convert to millions
+
+            # Calculate total
+            total_inventory_value = sum(inventory_by_status.values())
+
+            # Update inventory_levels section
+            if 'inventory_levels' in dashboard:
+                dashboard['inventory_levels']['total_value'] = round(total_inventory_value, 1)
+
+                # Map statuses to display names
+                locations = []
+                status_mapping = {
+                    'In Transit from Supplier': 'In Transit from Supplier',
+                    'At Dock': 'At Dock',
+                    'In Transit to DC': 'In Transit to DC',
+                    'At DC': 'At DC',
+                    'In Transit to Customer': 'In Transit to Customer',
+                }
+
+                for status, display_name in status_mapping.items():
+                    value = inventory_by_status.get(status, 0)
+                    if value > 0 or status in df['status'].values:  # Include if has value or exists in data
+                        locations.append({
+                            'name': display_name,
+                            'value': round(value, 1)
+                        })
+
+                # If no statuses match, keep at least some data
+                if not locations:
+                    for status, value in inventory_by_status.items():
+                        locations.append({
+                            'name': status,
+                            'value': round(value, 1)
+                        })
+
+                dashboard['inventory_levels']['locations'] = locations
+        except Exception as e:
+            # If calculation fails, keep the default value from YAML
+            print(f"Error calculating inventory levels: {e}")
+            pass
+
+        # Generate last 6 months including current month
+        current_date = datetime.now()
+        months = []
+        for i in range(5, -1, -1):  # 5 months ago to current month
+            month_date = current_date - timedelta(days=i*30)
+            months.append(month_date.strftime("%b"))
+
+        # Update demand_forecasting chart with last 6 months
+        if 'demand_forecasting' in dashboard:
+            dashboard['demand_forecasting']['period'] = "Last 6 Months"
+            dashboard['demand_forecasting']['chart_data'] = [
+                {"month": months[0], "value": 75},
+                {"month": months[1], "value": 82},
+                {"month": months[2], "value": 70},
+                {"month": months[3], "value": 65},
+                {"month": months[4], "value": 90},
+                {"month": months[5], "value": 78},
+            ]
+
+        # Update logistics_transportation charts with last 6 months
+        if 'logistics_transportation' in dashboard:
+            import random
+            random.seed(42)  # For consistent random values
+
+            # Update expedited_delayed chart
+            if 'expedited_delayed' in dashboard['logistics_transportation']:
+                dashboard['logistics_transportation']['expedited_delayed']['period'] = f"Last 6 Months"
+                dashboard['logistics_transportation']['expedited_delayed']['chart_data'] = [
+                    {"month": months[0], "value": 12},
+                    {"month": months[1], "value": 18},
+                    {"month": months[2], "value": 15},
+                    {"month": months[3], "value": 22},
+                    {"month": months[4], "value": 10},
+                    {"month": months[5], "value": 14},
+                ]
+
+            # Update otif_over_time chart
+            if 'otif_over_time' in dashboard['logistics_transportation']:
+                dashboard['logistics_transportation']['otif_over_time']['period'] = f"Last 6 Months"
+                dashboard['logistics_transportation']['otif_over_time']['chart_data'] = [
+                    {"month": months[0], "value": 88},
+                    {"month": months[1], "value": 85},
+                    {"month": months[2], "value": 90},
+                    {"month": months[3], "value": 87},
+                    {"month": months[4], "value": 92},
+                    {"month": months[5], "value": 95},
+                ]
+
+        return dashboard
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Metrics configuration not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading metrics: {str(e)}")
 
 # Mount static files and serve Flutter web app
 if FLUTTER_BUILD_PATH.exists():

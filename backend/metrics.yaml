@@ -1,0 +1,192 @@
+executive_dashboard:
+  title: "Executive Dashboard"
+  subtitle: "Real-time overview of supply chain performance"
+
+  kpi_cards:
+    - id: "total_inventory_value"
+      label: "Total Inventory Value"
+      value: 12.5
+      unit: "M"
+      prefix: "$"
+      change: 5
+      change_unit: "%"
+
+    - id: "on_time_delivery_rate"
+      label: "On-Time Delivery Rate"
+      value: 95
+      unit: "%"
+      change: -2
+      change_unit: "%"
+
+    - id: "otif"
+      label: "On-Time in Full"
+      value: 92
+      unit: "%"
+      change: -1
+      change_unit: "%"
+
+    - id: "demand_forecast_accuracy"
+      label: "Demand Forecast Accuracy"
+      value: 88
+      unit: "%"
+      change: 3
+      change_unit: "%"
+
+  supplier_risk:
+    label: "Supplier Risk Score"
+    value: "Low"
+    change: -1
+    change_unit: "%"
+
+  demand_forecasting:
+    title: "Demand Forecasting"
+    accuracy_label: "Demand Forecast Accuracy"
+    accuracy_value: 88
+    unit: "%"
+    period: "Next 6 Months"
+    chart_data:
+      - month: "Jan"
+        value: 75
+      - month: "Feb"
+        value: 82
+      - month: "Mar"
+        value: 70
+      - month: "Apr"
+        value: 65
+      - month: "May"
+        value: 90
+      - month: "Jun"
+        value: 78
+
+  inventory_levels:
+    title: "Inventory Levels"
+    subtitle: "Inventory Value by Status"
+    total_value: 12.5
+    unit: "M"
+    prefix: "$"
+    period: "Current"
+    locations:
+      - name: "Warehouse A"
+        value: 4.2
+      - name: "Warehouse B"
+        value: 2.8
+      - name: "Distribution Center"
+        value: 3.1
+      - name: "Retail Stores"
+        value: 2.4
+
+  supplier_performance:
+    title: "Supplier Performance"
+    columns:
+      - "Supplier"
+      - "On-Time Delivery"
+      - "Quality Score"
+      - "Lead Time"
+      - "Risk Score"
+    suppliers:
+      - name: "Supplier Alpha"
+        on_time_delivery: 98
+        quality_score: 95
+        lead_time: "7 days"
+        risk_score: "Low"
+
+      - name: "Supplier Beta"
+        on_time_delivery: 92
+        quality_score: 88
+        lead_time: "10 days"
+        risk_score: "Medium"
+
+      - name: "Supplier Gamma"
+        on_time_delivery: 95
+        quality_score: 92
+        lead_time: "8 days"
+        risk_score: "Low"
+
+      - name: "Supplier Delta"
+        on_time_delivery: 85
+        quality_score: 80
+        lead_time: "14 days"
+        risk_score: "High"
+
+      - name: "Supplier Epsilon"
+        on_time_delivery: 90
+        quality_score: 85
+        lead_time: "12 days"
+        risk_score: "Medium"
+
+  risk_assessment:
+    title: "Risk Assessment"
+    factors:
+      - factor: "Geopolitical Instability"
+        severity: "Medium"
+      - factor: "Natural Disasters"
+        severity: "Low"
+      - factor: "Economic Downturn"
+        severity: "High"
+
+  predictive_risk_analysis:
+    title: "Predictive Risk Analysis"
+    disruption_label: "Potential Supply Chain Disruptions"
+    disruption_level: "High"
+    period: "Next 3 Months"
+
+    contributing_factors:
+      - name: "Weather Patterns"
+        value: 75
+      - name: "Geopolitical Events"
+        value: 45
+      - name: "Economic Indicators"
+        value: 85
+
+    disruption_types:
+      - type: "Port Closure (Weather)"
+        probability: 75
+      - type: "Supplier Strike (Geopolitical)"
+        probability: 50
+      - type: "Demand Drop (Economic)"
+        probability: 25
+
+  logistics_transportation:
+    title: "Logistics & Transportation"
+
+    expedited_delayed:
+      label: "% of Shipments Expedited or Delayed"
+      value: 15
+      unit: "%"
+      period: "Last 12 Months"
+      chart_data:
+        - month: "Jan"
+          value: 12
+        - month: "Feb"
+          value: 18
+        - month: "Mar"
+          value: 15
+        - month: "Apr"
+          value: 22
+        - month: "May"
+          value: 10
+        - month: "Jun"
+          value: 14
+        - month: "Jul"
+          value: 16
+
+    otif_over_time:
+      label: "OTIF Over Time"
+      value: 90
+      unit: "%"
+      period: "Last 12 Months"
+      chart_data:
+        - month: "Jan"
+          value: 88
+        - month: "Feb"
+          value: 85
+        - month: "Mar"
+          value: 90
+        - month: "Apr"
+          value: 87
+        - month: "May"
+          value: 92
+        - month: "Jun"
+          value: 95
+        - month: "Jul"
+          value: 91

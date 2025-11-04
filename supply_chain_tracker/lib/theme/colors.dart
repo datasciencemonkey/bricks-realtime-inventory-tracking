@@ -26,6 +26,16 @@ class AppColors {
   static const Color darkTextSecondary = Color(0xFFB8B5A8);
   static const Color lightTextSecondary = Color(0xFF6B7055);
 
+  // Metric change indicators (work in both light and dark mode)
+  static const Color positiveChange = Color(0xFF10B981); // Bright green
+  static const Color negativeChange = Color(0xFFEF4444); // Bright red
+
+  // Risk level indicators (high contrast for light mode, visible in dark mode)
+  static const Color riskLow = Color(0xFF10B981); // Bright green
+  static const Color riskMedium = Color(0xFFF59E0B); // Bright amber
+  static const Color riskHigh = Color(0xFFEF4444); // Bright red
+  static const Color riskDefault = Color(0xFF6B7280); // Medium gray
+
   // Gradients
   static LinearGradient get sunriseGradient => const LinearGradient(
         colors: [Color(0xFFFF8C42), Color(0xFFFFB366)],
@@ -43,7 +53,7 @@ class AppColors {
         gradient: LinearGradient(
           colors: [
             color ?? unfiGreen,
-            (color ?? unfiGreen).withOpacity(0.7),
+            (color ?? unfiGreen).withValues(alpha: 0.7),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -51,7 +61,7 @@ class AppColors {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: (color ?? unfiGreen).withOpacity(0.4),
+            color: (color ?? unfiGreen).withValues(alpha: 0.4),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
