@@ -6,12 +6,9 @@ import '../models/batch_event.dart';
 import 'package:latlong2/latlong.dart';
 
 class ApiService {
-  // Use relative URL for Databricks Apps deployment, localhost for development
-  static String get baseUrl {
-    // In web deployment, use relative URLs (empty string means same origin)
-    // This works for both Databricks Apps and local development with proxy
-    return '';
-  }
+  // Use relative URL for same-origin deployment (Databricks Apps)
+  // Empty string means API calls go to the same host serving the frontend
+  static const String baseUrl = '';
 
   // Cache storage
   static List<Map<String, dynamic>>? _batchesCache;
