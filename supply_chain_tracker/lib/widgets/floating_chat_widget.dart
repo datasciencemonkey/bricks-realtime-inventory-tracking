@@ -134,31 +134,36 @@ class _FloatingChatWidgetState extends State<FloatingChatWidget>
               alignment: Alignment.bottomRight,
               child: FadeTransition(
                 opacity: _fadeAnimation,
-                child: Material(
-                  elevation: 8,
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: 380,
-                    height: 600,
-                    decoration: BoxDecoration(
+                child: Container(
+                  width: 380,
+                  height: 600,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? theme.colorScheme.background
+                        : AppColors.lightCard,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
                       color: isDark
-                          ? theme.colorScheme.background
-                          : AppColors.lightCard,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isDark
-                            ? AppColors.darkBorder
-                            : AppColors.lightBorder,
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.15),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
+                          ? AppColors.darkBorder
+                          : AppColors.lightBorder,
+                      width: 1,
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 24,
+                        spreadRadius: 0,
+                        offset: const Offset(0, 8),
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 8,
+                        spreadRadius: 0,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  clipBehavior: Clip.antiAlias,
                     child: Column(
                       children: [
                         // Chat header
@@ -265,7 +270,6 @@ class _FloatingChatWidgetState extends State<FloatingChatWidget>
                         ),
                       ],
                     ),
-                  ),
                 ),
               ),
             ),
