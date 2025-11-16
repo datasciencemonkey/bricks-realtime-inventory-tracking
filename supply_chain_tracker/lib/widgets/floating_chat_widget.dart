@@ -117,6 +117,14 @@ class _FloatingChatWidgetState extends State<FloatingChatWidget>
     });
   }
 
+  void _clearChat() {
+    setState(() {
+      _messages.clear();
+    });
+    // Add welcome message back after clearing
+    _addInitialMessage();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = ShadTheme.of(context);
@@ -138,15 +146,13 @@ class _FloatingChatWidgetState extends State<FloatingChatWidget>
                   width: 380,
                   height: 600,
                   decoration: BoxDecoration(
-                    color: isDark
-                        ? theme.colorScheme.background
-                        : AppColors.lightCard,
+                    color: theme.colorScheme.background,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: isDark
-                          ? AppColors.darkBorder
-                          : AppColors.lightBorder,
-                      width: 1,
+                          ? theme.colorScheme.border.withValues(alpha: 0.5)
+                          : theme.colorScheme.border,
+                      width: 1.5,
                     ),
                     boxShadow: [
                       BoxShadow(
@@ -214,6 +220,18 @@ class _FloatingChatWidgetState extends State<FloatingChatWidget>
                                 ),
                               ),
                               IconButton(
+                                onPressed: _clearChat,
+                                icon: const Icon(
+                                  Icons.delete_outline_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                tooltip: 'Clear chat',
+                              ),
+                              const SizedBox(width: 12),
+                              IconButton(
                                 onPressed: _toggleChat,
                                 icon: const Icon(
                                   Icons.close_rounded,
@@ -234,17 +252,17 @@ class _FloatingChatWidgetState extends State<FloatingChatWidget>
                             theme: DefaultChatTheme(
                               backgroundColor: isDark
                                   ? theme.colorScheme.background
-                                  : AppColors.lightCard,
+                                  : theme.colorScheme.background,
                               primaryColor: AppColors.unfiGreen,
                               secondaryColor: isDark
-                                  ? AppColors.darkCard
-                                  : Colors.grey.shade100,
+                                  ? theme.colorScheme.muted
+                                  : theme.colorScheme.muted,
                               inputBackgroundColor: isDark
-                                  ? AppColors.darkCardElevated
-                                  : Colors.white,
+                                  ? theme.colorScheme.card
+                                  : theme.colorScheme.card,
                               inputTextColor: isDark
-                                  ? Colors.white
-                                  : Colors.black87,
+                                  ? theme.colorScheme.foreground
+                                  : theme.colorScheme.foreground,
                               inputBorderRadius: BorderRadius.circular(24),
                               messageBorderRadius: 12,
                               inputPadding: const EdgeInsets.symmetric(
@@ -252,7 +270,7 @@ class _FloatingChatWidgetState extends State<FloatingChatWidget>
                                 vertical: 12,
                               ),
                               receivedMessageBodyTextStyle: TextStyle(
-                                color: isDark ? Colors.white : Colors.black87,
+                                color: theme.colorScheme.foreground,
                                 fontSize: 14,
                               ),
                               sentMessageBodyTextStyle: const TextStyle(

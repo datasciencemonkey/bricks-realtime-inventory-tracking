@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict
 import os
@@ -12,6 +12,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from functools import lru_cache
 import yaml
+import json
 
 # Load environment variables
 load_dotenv()
@@ -535,3 +536,128 @@ if FLUTTER_BUILD_PATH.exists():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+# Chat Models
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
+    messages: List[ChatMessage]
+
+class ChatResponse(BaseModel):
+    response: str
+    model: str
+
+
+@app.post("/api/chat/stream")
+async def chat_stream(request: ChatRequest):
+    """Chat with Databricks model endpoint using streaming"""
+    from openai import OpenAI
+
+    databricks_token = os.getenv("DATABRICKS_TOKEN")
+    chat_endpoint = os.getenv("DATABRICKS_CHAT_ENDPOINT")
+    chat_model = os.getenv("DATABRICKS_CHAT_MODEL")
+
+    if not all([databricks_token, chat_endpoint, chat_model]):
+        raise HTTPException(
+            status_code=500,
+            detail="Chat endpoint not configured. Please set DATABRICKS_TOKEN, DATABRICKS_CHAT_ENDPOINT, and DATABRICKS_CHAT_MODEL in .env"
+        )
+
+    async def generate_stream():
+        try:
+            # Initialize OpenAI client with Databricks endpoint
+            client = OpenAI(
+                api_key=databricks_token,
+                base_url=chat_endpoint
+            )
+
+            # Convert messages to Databricks format
+            messages = [
+                {"role": msg.role, "content": msg.content}
+                for msg in request.messages
+            ]
+
+            # Make the streaming chat completion request (Databricks responses API)
+            response = client.responses.create(
+                model=chat_model,
+                input=messages,
+                stream=True  # Boolean: True for streaming, False for non-streaming
+            )
+
+            # Stream the response chunks
+            for chunk in response:
+                # Databricks uses chunk.delta for streaming text
+                if hasattr(chunk, 'delta') and chunk.delta:
+                    # Yield the delta content directly
+                    yield f"data: {json.dumps({'content': chunk.delta})}\n\n"
+
+            # Send done signal
+            yield f"data: {json.dumps({'done': True})}\n\n"
+
+        except Exception as e:
+            print(f"Stream error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        generate_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
+
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    """Chat with Databricks model endpoint using OpenAI SDK (non-streaming)"""
+    from openai import OpenAI
+
+    databricks_token = os.getenv("DATABRICKS_TOKEN")
+    chat_endpoint = os.getenv("DATABRICKS_CHAT_ENDPOINT")
+    chat_model = os.getenv("DATABRICKS_CHAT_MODEL")
+
+    if not all([databricks_token, chat_endpoint, chat_model]):
+        raise HTTPException(
+            status_code=500,
+            detail="Chat endpoint not configured. Please set DATABRICKS_TOKEN, DATABRICKS_CHAT_ENDPOINT, and DATABRICKS_CHAT_MODEL in .env"
+        )
+
+    try:
+        # Initialize OpenAI client with Databricks endpoint
+        client = OpenAI(
+            api_key=databricks_token,
+            base_url=chat_endpoint
+        )
+
+        # Convert messages to OpenAI format
+        messages = [
+            {"role": msg.role, "content": msg.content}
+            for msg in request.messages
+        ]
+
+        # Make the chat completion request using responses.create (Databricks format)
+        response = client.responses.create(
+            model=chat_model,
+            input=messages
+        )
+
+        # Extract the response text from Databricks format
+        response_text = response.output[0].content[0].text
+
+        return ChatResponse(
+            response=response_text,
+            model=chat_model
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error calling chat endpoint: {str(e)}"
+        )

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/inventory_item.dart';
 import '../models/status_summary.dart';
@@ -6,9 +7,18 @@ import '../models/batch_event.dart';
 import 'package:latlong2/latlong.dart';
 
 class ApiService {
-  // Use relative URL for same-origin deployment (Databricks Apps)
-  // Empty string means API calls go to the same host serving the frontend
-  static const String baseUrl = '';
+  // Hybrid approach: Environment variable takes precedence, then debug mode detection
+  // Production (release mode): Uses same-origin (empty string)
+  // Development (debug mode): Uses localhost:8000
+  // Custom: Override with --dart-define=API_BASE_URL=http://your-server:port
+  static String get baseUrl {
+    const envUrl = String.fromEnvironment('API_BASE_URL', defaultValue: '');
+    if (envUrl.isNotEmpty) {
+      return envUrl;
+    }
+    // Fallback to debug detection
+    return kDebugMode ? 'http://localhost:8000' : '';
+  }
 
   // Cache storage
   static List<Map<String, dynamic>>? _batchesCache;
