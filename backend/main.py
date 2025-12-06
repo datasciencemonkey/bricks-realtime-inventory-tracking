@@ -14,6 +14,12 @@ from functools import lru_cache
 import yaml
 import json
 
+from system_prompts import (
+    build_executive_dashboard_system_prompt,
+    build_realtime_snapshot_system_prompt,
+    build_shipment_tracking_system_prompt
+)
+
 # Load environment variables
 load_dotenv()
 
@@ -42,6 +48,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Middleware to prevent buffering for streaming responses
+@app.middleware("http")
+async def disable_buffering(request, call_next):
+    response = await call_next(request)
+    # Disable buffering for event streams
+    if response.headers.get("content-type") == "text/event-stream":
+        response.headers["X-Accel-Buffering"] = "no"
+    return response
 
 # Models
 class InventoryItem(BaseModel):
@@ -265,15 +280,25 @@ def get_batch_events(batch_id: str):
 
 @app.get("/api/batches")
 def get_batches():
-    """Get list of unique batch IDs with product names (cached)"""
+    """Get list of unique batch IDs with product names and transit status (cached)"""
     catalog = os.getenv("DATABRICKS_CATALOG", "")
     schema = os.getenv("DATABRICKS_SCHEMA", "")
 
-    table_name = "batch_events_v1"
+    batch_table = "batch_events_v1"
+    inventory_table = "inventory_realtime_v1"
     if catalog and schema:
-        table_name = f"{catalog}.{schema}.{table_name}"
+        batch_table = f"{catalog}.{schema}.{batch_table}"
+        inventory_table = f"{catalog}.{schema}.{inventory_table}"
 
-    query = f"SELECT DISTINCT batch_id, product_name FROM {table_name}"
+    # Join with inventory to get transit_status for each batch
+    query = f"""
+        SELECT DISTINCT
+            b.batch_id,
+            b.product_name,
+            COALESCE(i.transit_status, 'On Time') as transit_status
+        FROM {batch_table} b
+        LEFT JOIN {inventory_table} i ON b.batch_id = i.batch_id
+    """
 
     # Use cache with 5-minute TTL
     df = get_databricks_data(query, cache_key="batches_list", ttl_seconds=300)
@@ -330,48 +355,54 @@ def get_executive_dashboard():
 
         dashboard = metrics.get('executive_dashboard', {})
 
-        # Calculate total inventory value from actual data
+        # Check if Databricks is configured
+        databricks_host = os.getenv("DATABRICKS_HOST")
+        databricks_token = os.getenv("DATABRICKS_TOKEN")
+        databricks_http_path = os.getenv("DATABRICKS_HTTP_PATH")
+        databricks_configured = all([databricks_host, databricks_token, databricks_http_path])
+
+        # Calculate total inventory value from actual data (only if Databricks is configured)
         catalog = os.getenv("DATABRICKS_CATALOG", "")
         schema = os.getenv("DATABRICKS_SCHEMA", "")
         table_name = "inventory_realtime_v1"
         if catalog and schema:
             table_name = f"{catalog}.{schema}.{table_name}"
 
-        try:
-            query = f"SELECT qty, unit_price FROM {table_name}"
-            df = get_databricks_data(query, cache_key="inventory_value_calc", ttl_seconds=300)
+        if databricks_configured:
+            try:
+                query = f"SELECT qty, unit_price FROM {table_name}"
+                df = get_databricks_data(query, cache_key="inventory_value_calc", ttl_seconds=300)
 
-            # Calculate total value (qty * unit_price)
-            total_value = (df['qty'] * df['unit_price']).sum()
+                # Calculate total value (qty * unit_price)
+                total_value = (df['qty'] * df['unit_price']).sum()
 
-            # Format as millions with 1 decimal place
-            total_value_millions = round(total_value / 1_000_000, 1)
+                # Format as millions with 1 decimal place
+                total_value_millions = round(total_value / 1_000_000, 1)
 
-            # Update the KPI card for total inventory value
-            if 'kpi_cards' in dashboard and len(dashboard['kpi_cards']) > 0:
-                # Find and update the Total Inventory Value card (usually first one)
-                for card in dashboard['kpi_cards']:
-                    if card.get('id') == 'total_inventory_value':
-                        card['value'] = total_value_millions
-                        break
-        except Exception as e:
-            # If calculation fails, keep the default value from YAML
-            print(f"Error calculating inventory value: {e}")
-            pass
+                # Update the KPI card for total inventory value
+                if 'kpi_cards' in dashboard and len(dashboard['kpi_cards']) > 0:
+                    # Find and update the Total Inventory Value card (usually first one)
+                    for card in dashboard['kpi_cards']:
+                        if card.get('id') == 'total_inventory_value':
+                            card['value'] = total_value_millions
+                            break
+            except Exception as e:
+                # If calculation fails, keep the default value from YAML
+                print(f"Error calculating inventory value: {e}")
 
-        # Calculate OTIF (On-Time in Full) - 3% below On-Time Delivery Rate
+        # Calculate OTIF (On-Time in Full) - 3% below Fill Rate
         if 'kpi_cards' in dashboard:
-            on_time_delivery_rate = None
+            fill_rate = None
 
-            # Find the On-Time Delivery Rate value
+            # Find the Fill Rate value
             for card in dashboard['kpi_cards']:
-                if card.get('id') == 'on_time_delivery_rate':
-                    on_time_delivery_rate = card.get('value', 95)
+                if card.get('id') == 'fill_rate':
+                    fill_rate = card.get('value', 95)
                     break
 
-            if on_time_delivery_rate is not None:
-                # Calculate OTIF as 3% below OTDR
-                otif_value = on_time_delivery_rate - 3
+            if fill_rate is not None:
+                # Calculate OTIF as 3% below Fill Rate
+                otif_value = fill_rate - 3
 
                 # Update the OTIF card
                 for card in dashboard['kpi_cards']:
@@ -379,56 +410,56 @@ def get_executive_dashboard():
                         card['value'] = otif_value
                         break
 
-        # Update inventory levels based on real-time data
-        try:
-            query = f"SELECT status, qty, unit_price FROM {table_name}"
-            df = get_databricks_data(query, cache_key="inventory_levels_calc", ttl_seconds=300)
+        # Update inventory levels based on real-time data (only if Databricks is configured)
+        if databricks_configured:
+            try:
+                query = f"SELECT status, qty, unit_price FROM {table_name}"
+                df = get_databricks_data(query, cache_key="inventory_levels_calc", ttl_seconds=300)
 
-            # Calculate inventory by status
-            inventory_by_status = {}
-            for status in df['status'].unique():
-                status_df = df[df['status'] == status]
-                total_value = (status_df['qty'] * status_df['unit_price']).sum()
-                inventory_by_status[status] = total_value / 1_000_000  # Convert to millions
+                # Calculate inventory by status
+                inventory_by_status = {}
+                for status in df['status'].unique():
+                    status_df = df[df['status'] == status]
+                    total_value = (status_df['qty'] * status_df['unit_price']).sum()
+                    inventory_by_status[status] = total_value / 1_000_000  # Convert to millions
 
-            # Calculate total
-            total_inventory_value = sum(inventory_by_status.values())
+                # Calculate total
+                total_inventory_value = sum(inventory_by_status.values())
 
-            # Update inventory_levels section
-            if 'inventory_levels' in dashboard:
-                dashboard['inventory_levels']['total_value'] = round(total_inventory_value, 1)
+                # Update inventory_levels section
+                if 'inventory_levels' in dashboard:
+                    dashboard['inventory_levels']['total_value'] = round(total_inventory_value, 1)
 
-                # Map statuses to display names
-                locations = []
-                status_mapping = {
-                    'In Transit from Supplier': 'In Transit from Supplier',
-                    'At Dock': 'At Dock',
-                    'In Transit to DC': 'In Transit to DC',
-                    'At DC': 'At DC',
-                    'In Transit to Customer': 'In Transit to Customer',
-                }
+                    # Map statuses to display names
+                    locations = []
+                    status_mapping = {
+                        'In Transit from Supplier': 'In Transit from Supplier',
+                        'At Dock': 'At Dock',
+                        'In Transit to DC': 'In Transit to DC',
+                        'At DC': 'At DC',
+                        'In Transit to Customer': 'In Transit to Customer',
+                    }
 
-                for status, display_name in status_mapping.items():
-                    value = inventory_by_status.get(status, 0)
-                    if value > 0 or status in df['status'].values:  # Include if has value or exists in data
-                        locations.append({
-                            'name': display_name,
-                            'value': round(value, 1)
-                        })
+                    for status, display_name in status_mapping.items():
+                        value = inventory_by_status.get(status, 0)
+                        if value > 0 or status in df['status'].values:  # Include if has value or exists in data
+                            locations.append({
+                                'name': display_name,
+                                'value': round(value, 1)
+                            })
 
-                # If no statuses match, keep at least some data
-                if not locations:
-                    for status, value in inventory_by_status.items():
-                        locations.append({
-                            'name': status,
-                            'value': round(value, 1)
-                        })
+                    # If no statuses match, keep at least some data
+                    if not locations:
+                        for status, value in inventory_by_status.items():
+                            locations.append({
+                                'name': status,
+                                'value': round(value, 1)
+                            })
 
-                dashboard['inventory_levels']['locations'] = locations
-        except Exception as e:
-            # If calculation fails, keep the default value from YAML
-            print(f"Error calculating inventory levels: {e}")
-            pass
+                    dashboard['inventory_levels']['locations'] = locations
+            except Exception as e:
+                # If calculation fails, keep the default value from YAML
+                print(f"Error calculating inventory levels: {e}")
 
         # Generate last 6 months including current month
         current_date = datetime.now()
@@ -545,15 +576,89 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
+    context: Optional[str] = None  # "executiveDashboard", "realtimeSnapshot", "shipmentTracking"
+
+class ShipmentTrackingChatRequest(BaseModel):
+    messages: List[ChatMessage]
+    selected_batch_id: Optional[str] = None  # Optional batch ID for focused context
 
 class ChatResponse(BaseModel):
     response: str
     model: str
 
 
+async def generate_chat_stream_completions(messages: List[dict], model: str, endpoint: str, token: str):
+    """
+    Reusable async generator for streaming chat responses from Databricks.
+
+    Args:
+        messages: List of message dicts with 'role' and 'content' keys
+        model: The Databricks model name to use
+        endpoint: The Databricks serving endpoint URL
+        token: Databricks API token
+
+    Yields:
+        SSE-formatted strings with JSON payloads containing 'content', 'done', or 'error'
+    """
+    import asyncio
+    from openai import OpenAI
+
+    try:
+        client = OpenAI(
+            api_key=token,
+            base_url=endpoint
+        )
+
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=5000,
+            stream=True
+        )
+
+        for chunk in response:
+            if chunk.choices and len(chunk.choices) > 0:
+                delta = chunk.choices[0].delta
+                if delta and delta.content:
+                    yield f"data: {json.dumps({'content': delta.content})}\n\n"
+                    await asyncio.sleep(0)
+
+        yield f"data: {json.dumps({'done': True})}\n\n"
+
+    except Exception as e:
+        print(f"Chat stream error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+
+@app.get("/api/test/stream")
+async def test_stream():
+    """Test streaming endpoint to diagnose buffering issues"""
+    import asyncio
+
+    async def generate_test_stream():
+        # Send a simple counter stream
+        for i in range(10):
+            yield f"data: {json.dumps({'count': i, 'message': f'Chunk {i}'})}\n\n"
+            await asyncio.sleep(0.5)  # 500ms delay between chunks
+        yield f"data: {json.dumps({'done': True})}\n\n"
+
+    return StreamingResponse(
+        generate_test_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Transfer-Encoding": "chunked"
+        }
+    )
+
 @app.post("/api/chat/stream")
 async def chat_stream(request: ChatRequest):
     """Chat with Databricks model endpoint using streaming"""
+    import asyncio
     from openai import OpenAI
 
     databricks_token = os.getenv("DATABRICKS_TOKEN")
@@ -593,6 +698,8 @@ async def chat_stream(request: ChatRequest):
                 if hasattr(chunk, 'delta') and chunk.delta:
                     # Yield the delta content directly
                     yield f"data: {json.dumps({'content': chunk.delta})}\n\n"
+                    # Allow other async tasks to run
+                    await asyncio.sleep(0)
 
             # Send done signal
             yield f"data: {json.dumps({'done': True})}\n\n"
@@ -609,7 +716,124 @@ async def chat_stream(request: ChatRequest):
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
+            "X-Accel-Buffering": "no",
+            "Transfer-Encoding": "chunked"
+        }
+    )
+
+
+@app.post("/api/chat/executive-dashboard/stream")
+async def chat_executive_dashboard_stream(request: ChatRequest):
+    """Chat with executive dashboard context - streaming response with metrics.yaml data"""
+    databricks_token = os.getenv("DATABRICKS_TOKEN")
+    chat_endpoint = os.getenv("DATABRICKS_CHAT_ENDPOINT")
+    chat_model = os.getenv("DATABRICKS_GENERAL_MODEL")
+
+    if not all([databricks_token, chat_endpoint, chat_model]):
+        raise HTTPException(
+            status_code=500,
+            detail="Chat endpoint not configured. Please set DATABRICKS_TOKEN, DATABRICKS_CHAT_ENDPOINT, and DATABRICKS_GENERAL_MODEL in .env"
+        )
+
+    # Build messages with executive dashboard system prompt
+    messages = [{"role": "system", "content": build_executive_dashboard_system_prompt()}]
+    messages.extend({"role": msg.role, "content": msg.content} for msg in request.messages)
+
+    return StreamingResponse(
+        generate_chat_stream_completions(messages, chat_model, chat_endpoint, databricks_token),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Transfer-Encoding": "chunked"
+        }
+    )
+
+
+@app.post("/api/chat/realtime-snapshot/stream")
+async def chat_realtime_snapshot_stream(request: ChatRequest):
+    """Chat with real-time inventory snapshot context - streaming response with live inventory data"""
+    databricks_token = os.getenv("DATABRICKS_TOKEN")
+    chat_endpoint = os.getenv("DATABRICKS_CHAT_ENDPOINT")
+    chat_model = os.getenv("DATABRICKS_GENERAL_MODEL")
+
+    if not all([databricks_token, chat_endpoint, chat_model]):
+        raise HTTPException(
+            status_code=500,
+            detail="Chat endpoint not configured. Please set DATABRICKS_TOKEN, DATABRICKS_CHAT_ENDPOINT, and DATABRICKS_GENERAL_MODEL in .env"
+        )
+
+    # Fetch current inventory data
+    try:
+        inventory_data = get_inventory()
+    except Exception as e:
+        print(f"Error fetching inventory for chat context: {e}")
+        inventory_data = []
+
+    # Build messages with realtime snapshot system prompt
+    messages = [{"role": "system", "content": build_realtime_snapshot_system_prompt(inventory_data)}]
+    messages.extend({"role": msg.role, "content": msg.content} for msg in request.messages)
+
+    return StreamingResponse(
+        generate_chat_stream_completions(messages, chat_model, chat_endpoint, databricks_token),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Transfer-Encoding": "chunked"
+        }
+    )
+
+
+@app.post("/api/chat/shipment-tracking/stream")
+async def chat_shipment_tracking_stream(request: ShipmentTrackingChatRequest):
+    """Chat with shipment tracking context - streaming response with batch tracking data"""
+    databricks_token = os.getenv("DATABRICKS_TOKEN")
+    chat_endpoint = os.getenv("DATABRICKS_CHAT_ENDPOINT")
+    chat_model = os.getenv("DATABRICKS_GENERAL_MODEL")
+
+    if not all([databricks_token, chat_endpoint, chat_model]):
+        raise HTTPException(
+            status_code=500,
+            detail="Chat endpoint not configured. Please set DATABRICKS_TOKEN, DATABRICKS_CHAT_ENDPOINT, and DATABRICKS_GENERAL_MODEL in .env"
+        )
+
+    # Fetch batches data
+    try:
+        batches_response = get_batches()
+        batches_data = batches_response.get('batches', [])
+    except Exception as e:
+        print(f"Error fetching batches for chat context: {e}")
+        batches_data = []
+
+    # Fetch batch events if a specific batch is selected
+    batch_events = None
+    if request.selected_batch_id:
+        try:
+            batch_events = get_batch_events(request.selected_batch_id)
+        except Exception as e:
+            print(f"Error fetching batch events for {request.selected_batch_id}: {e}")
+            batch_events = None
+
+    # Build messages with shipment tracking system prompt
+    system_prompt = build_shipment_tracking_system_prompt(
+        batches_data=batches_data,
+        selected_batch_id=request.selected_batch_id,
+        batch_events=batch_events
+    )
+    messages = [{"role": "system", "content": system_prompt}]
+    messages.extend({"role": msg.role, "content": msg.content} for msg in request.messages)
+
+    return StreamingResponse(
+        generate_chat_stream_completions(messages, chat_model, chat_endpoint, databricks_token),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Transfer-Encoding": "chunked"
         }
     )
 

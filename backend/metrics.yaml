@@ -5,14 +5,14 @@ executive_dashboard:
   kpi_cards:
     - id: "total_inventory_value"
       label: "Total Inventory Value"
-      value: 12.5
+      value: 84.7
       unit: "M"
       prefix: "$"
       change: 5
       change_unit: "%"
 
-    - id: "on_time_delivery_rate"
-      label: "On-Time Delivery Rate"
+    - id: "fill_rate"
+      label: "Fill Rate (%)"
       value: 95
       unit: "%"
       change: -2
@@ -45,35 +45,35 @@ executive_dashboard:
     unit: "%"
     period: "Next 6 Months"
     chart_data:
-      - month: "Jan"
+      - month: "Jul"
         value: 75
-      - month: "Feb"
+      - month: "Aug"
         value: 82
-      - month: "Mar"
+      - month: "Sep"
         value: 70
-      - month: "Apr"
+      - month: "Oct"
         value: 65
-      - month: "May"
+      - month: "Nov"
         value: 90
-      - month: "Jun"
+      - month: "Dec"
         value: 78
 
   inventory_levels:
     title: "Inventory Levels"
     subtitle: "Inventory Value by Status"
-    total_value: 12.5
+    total_value: 84.7
     unit: "M"
     prefix: "$"
     period: "Current"
     locations:
-      - name: "Warehouse A"
-        value: 4.2
-      - name: "Warehouse B"
-        value: 2.8
-      - name: "Distribution Center"
-        value: 3.1
-      - name: "Retail Stores"
-        value: 2.4
+      - name: "In Transit from Supplier"
+        value: 5.1
+      - name: "In Transit to Customer"
+        value: 8.0
+      - name: "In Transit to DC"
+        value: 2.6
+      - name: "At DC"
+        value: 67.9
 
   supplier_performance:
     title: "Supplier Performance"
@@ -155,20 +155,18 @@ executive_dashboard:
       unit: "%"
       period: "Last 12 Months"
       chart_data:
-        - month: "Jan"
-          value: 12
-        - month: "Feb"
-          value: 18
-        - month: "Mar"
-          value: 15
-        - month: "Apr"
-          value: 22
-        - month: "May"
-          value: 10
-        - month: "Jun"
-          value: 14
         - month: "Jul"
-          value: 16
+          value: 12
+        - month: "Aug"
+          value: 18
+        - month: "Sep"
+          value: 15
+        - month: "Oct"
+          value: 22
+        - month: "Nov"
+          value: 10
+        - month: "Dec"
+          value: 14
 
     otif_over_time:
       label: "OTIF Over Time"
@@ -176,17 +174,16 @@ executive_dashboard:
       unit: "%"
       period: "Last 12 Months"
       chart_data:
-        - month: "Jan"
-          value: 88
-        - month: "Feb"
-          value: 85
-        - month: "Mar"
-          value: 90
-        - month: "Apr"
-          value: 87
-        - month: "May"
-          value: 92
-        - month: "Jun"
-          value: 95
         - month: "Jul"
-          value: 91
+          value: 88
+        - month: "Aug"
+          value: 85
+        - month: "Sep"
+          value: 90
+        - month: "Oct"
+          value: 87
+        - month: "Nov"
+          value: 92
+        - month: "Dec"
+          value: 95
+      
