@@ -7,6 +7,7 @@ import 'dart:async';
 import '../models/batch_event.dart';
 import '../services/api_service.dart';
 import '../theme/colors.dart';
+import '../widgets/floating_chat_widget.dart';
 
 class BatchTrackingScreen extends StatefulWidget {
   const BatchTrackingScreen({super.key});
@@ -17,6 +18,7 @@ class BatchTrackingScreen extends StatefulWidget {
 
 class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
   final ApiService _apiService = ApiService();
+  final MapController _mapController = MapController();
   List<Map<String, dynamic>> _batches = [];
   List<BatchEvent> _events = [];
   String? _selectedBatchId;
@@ -33,14 +35,47 @@ class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
   String _currentStatus = '';
   Timer? _animationTimer;
   bool _isMapMaximized = false;
+  bool _highlightDelays = false;
+
+  // Key for forcing dropdown rebuild when clearing
+  int _dropdownKey = 0;
 
   // Computed properties
   List<String> get _productNames {
-    return _batches
+    var batches = _batches;
+    // When delay filter is on, only show products that have delayed batches
+    if (_highlightDelays) {
+      batches = batches.where(_isBatchDelayed).toList();
+    }
+    return batches
         .map((b) => b['product_name'] as String)
         .toSet()
         .toList()
       ..sort();
+  }
+
+  /// Check if a batch is delayed based on transit_status
+  bool _isBatchDelayed(Map<String, dynamic> batch) {
+    final transitStatus = (batch['transit_status'] as String?) ?? 'On Time';
+    return transitStatus.toLowerCase().contains('delay');
+  }
+
+  /// Get the number of delayed batches for the selected product
+  int get _delayedBatchCount {
+    if (_selectedProductName == null) {
+      return _batches.where(_isBatchDelayed).length;
+    }
+    return _filteredBatches.where(_isBatchDelayed).length;
+  }
+
+  /// Check if the currently selected batch is delayed
+  bool get _isSelectedBatchDelayed {
+    if (_selectedBatchId == null) return false;
+    final batch = _batches.firstWhere(
+      (b) => b['batch_id'] == _selectedBatchId,
+      orElse: () => {},
+    );
+    return batch.isNotEmpty && _isBatchDelayed(batch);
   }
 
   List<String> get _filteredProductNames {
@@ -56,6 +91,11 @@ class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
     var batches = _batches
         .where((b) => b['product_name'] == _selectedProductName)
         .toList();
+
+    // When delay filter is on, only show delayed batches
+    if (_highlightDelays) {
+      batches = batches.where(_isBatchDelayed).toList();
+    }
 
     if (_batchSearchValue.isEmpty) return batches;
     return batches
@@ -269,21 +309,31 @@ class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
       return _buildMaximizedMap(isDark);
     }
 
-    return Column(
+    return Stack(
       children: [
-        _buildControls(isDark),
-        if (_eventsLoading)
-          const Expanded(child: Center(child: CircularProgressIndicator()))
-        else if (_events.isNotEmpty) ...[
-          Expanded(child: _buildMapWithControls()),
-          _buildTimeline(isDark),
-        ] else
-          const Expanded(child: Center(child: Text('No events found'))),
+        Column(
+          children: [
+            _buildControls(isDark),
+            if (_eventsLoading)
+              const Expanded(child: Center(child: CircularProgressIndicator()))
+            else if (_events.isNotEmpty) ...[
+              Expanded(child: _buildMapWithControls()),
+              _buildTimeline(isDark),
+            ] else
+              const Expanded(child: Center(child: Text('No events found'))),
+          ],
+        ),
+        FloatingChatWidget(
+          context: ChatContext.shipmentTracking,
+          selectedBatchId: _selectedBatchId,
+        ),
       ],
     );
   }
 
   Widget _buildControls(bool isDark) {
+    final theme = ShadTheme.of(context);
+
     return Container(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -294,9 +344,10 @@ class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Product', style: ShadTheme.of(context).textTheme.small),
+                    Text('Product', style: theme.textTheme.small),
                     const SizedBox(height: 4),
                     ShadSelect<String>.withSearch(
+                      key: ValueKey('product_$_dropdownKey'),
                       minWidth: 180,
                       placeholder: const Text('Select product...'),
                       onSearchChanged: (value) =>
@@ -341,9 +392,10 @@ class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Batch', style: ShadTheme.of(context).textTheme.small),
+                    Text('Batch', style: theme.textTheme.small),
                     const SizedBox(height: 4),
                     ShadSelect<String>.withSearch(
+                      key: ValueKey('batch_$_dropdownKey'),
                       minWidth: 180,
                       placeholder: const Text('Select batch...'),
                       enabled: _selectedProductName != null,
@@ -361,18 +413,64 @@ class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
                             .map(
                           (batch) {
                             final batchId = batch['batch_id'] as String;
+                            final isDelayed = _isBatchDelayed(batch);
                             return Offstage(
                               offstage: !_filteredBatches
                                   .any((b) => b['batch_id'] == batchId),
                               child: ShadOption(
                                 value: batchId,
-                                child: Text(batchId),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (_highlightDelays && isDelayed) ...[
+                                      Icon(
+                                        Icons.warning_amber_rounded,
+                                        size: 14,
+                                        color: AppColors.yellow600,
+                                      ),
+                                      const SizedBox(width: 4),
+                                    ],
+                                    Text(
+                                      batchId,
+                                      style: (_highlightDelays && isDelayed)
+                                          ? TextStyle(
+                                              color: AppColors.maroon600,
+                                              fontWeight: FontWeight.w600,
+                                            )
+                                          : null,
+                                    ),
+                                  ],
+                                ),
                               ),
                             );
                           },
                         )
                       ],
-                      selectedOptionBuilder: (context, value) => Text(value),
+                      selectedOptionBuilder: (context, value) {
+                        final isDelayed = _isSelectedBatchDelayed;
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_highlightDelays && isDelayed) ...[
+                              Icon(
+                                Icons.warning_amber_rounded,
+                                size: 14,
+                                color: AppColors.yellow600,
+                              ),
+                              const SizedBox(width: 4),
+                            ],
+                            Text(
+                              value,
+                              style: (_highlightDelays && isDelayed)
+                                  ? TextStyle(
+                                      color: AppColors.maroon600,
+                                      fontWeight: FontWeight.w600,
+                                    )
+                                  : null,
+                            ),
+                          ],
+                        );
+                      },
                       onChanged: (value) {
                         if (mounted) {
                           setState(() {
@@ -386,23 +484,120 @@ class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
                   ],
                 ),
               ),
+              const SizedBox(width: 16),
+              // Show Only Delayed Batches toggle
+              ShadCard(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ShadSwitch(
+                      value: _highlightDelays,
+                      onChanged: (value) {
+                        setState(() {
+                          _highlightDelays = value;
+                          // Reset selections when filter changes
+                          _selectedProductName = null;
+                          _selectedBatchId = null;
+                          _events = [];
+                          _routeCoordinates = [];
+                          _stopTrackingAnimation();
+                          // Increment key to force dropdown rebuild and clear displayed values
+                          _dropdownKey++;
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Show Only Delayed Batches',
+                          style: theme.textTheme.small.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        if (_delayedBatchCount > 0)
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.warning_amber_rounded,
+                                size: 12,
+                                color: AppColors.yellow600,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '$_delayedBatchCount delayed',
+                                style: theme.textTheme.muted.copyWith(
+                                  fontSize: 11,
+                                  color: AppColors.maroon600,
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
           Row(
             children: [
-              const Spacer(),
-              ElevatedButton.icon(
-                onPressed: _routeCoordinates.isEmpty
-                    ? null
-                    : (_isAnimating
-                        ? _stopTrackingAnimation
-                        : _startTrackingAnimation),
-                icon: Icon(_isAnimating ? Icons.stop : Icons.play_arrow, size: 16),
-                label: Text(_isAnimating ? 'Stop Tracking' : 'Track History'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _isAnimating ? Colors.red : null,
+              // Show delay warning banner if selected batch is delayed
+              if (_highlightDelays && _isSelectedBatchDelayed)
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.yellow600.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: AppColors.yellow600.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          size: 20,
+                          color: AppColors.yellow600,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'This shipment is delayed',
+                          style: TextStyle(
+                            color: AppColors.maroon600,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                const Spacer(),
+              const SizedBox(width: 16),
+              ShadButton(
+                enabled: _routeCoordinates.isNotEmpty,
+                onPressed: _isAnimating
+                    ? _stopTrackingAnimation
+                    : _startTrackingAnimation,
+                leading: Icon(
+                  _isAnimating ? Icons.stop_rounded : Icons.play_arrow_rounded,
+                  size: 18,
                 ),
+                backgroundColor: _isAnimating
+                    ? AppColors.maroon600
+                    : AppColors.green600,
+                foregroundColor: Colors.white,
+                hoverBackgroundColor: _isAnimating
+                    ? AppColors.maroon600.withValues(alpha: 0.85)
+                    : AppColors.green600.withValues(alpha: 0.85),
+                child: Text(_isAnimating ? 'Stop Tracking' : 'Track History'),
               ),
             ],
           ),
@@ -487,18 +682,52 @@ class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
     return Stack(
       children: [
         _buildMap(),
+        // Zoom controls
         Positioned(
           top: 16,
           right: 16,
-          child: FloatingActionButton(
-            mini: true,
-            onPressed: () {
-              setState(() {
-                _isMapMaximized = true;
-              });
-            },
-            tooltip: 'Maximize Map',
-            child: const Icon(Icons.fullscreen),
+          child: Column(
+            children: [
+              FloatingActionButton(
+                mini: true,
+                heroTag: 'zoom_in',
+                onPressed: () {
+                  final currentZoom = _mapController.camera.zoom;
+                  _mapController.move(
+                    _mapController.camera.center,
+                    (currentZoom + 1).clamp(2.0, 18.0),
+                  );
+                },
+                tooltip: 'Zoom In',
+                child: const Icon(Icons.add),
+              ),
+              const SizedBox(height: 8),
+              FloatingActionButton(
+                mini: true,
+                heroTag: 'zoom_out',
+                onPressed: () {
+                  final currentZoom = _mapController.camera.zoom;
+                  _mapController.move(
+                    _mapController.camera.center,
+                    (currentZoom - 1).clamp(2.0, 18.0),
+                  );
+                },
+                tooltip: 'Zoom Out',
+                child: const Icon(Icons.remove),
+              ),
+              const SizedBox(height: 8),
+              FloatingActionButton(
+                mini: true,
+                heroTag: 'fullscreen',
+                onPressed: () {
+                  setState(() {
+                    _isMapMaximized = true;
+                  });
+                },
+                tooltip: 'Maximize Map',
+                child: const Icon(Icons.fullscreen),
+              ),
+            ],
           ),
         ),
       ],
@@ -509,18 +738,52 @@ class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
     return Stack(
       children: [
         _buildMap(),
+        // Zoom controls for maximized view
         Positioned(
           top: 16,
           right: 16,
-          child: FloatingActionButton(
-            mini: true,
-            onPressed: () {
-              setState(() {
-                _isMapMaximized = false;
-              });
-            },
-            tooltip: 'Exit Fullscreen',
-            child: const Icon(Icons.fullscreen_exit),
+          child: Column(
+            children: [
+              FloatingActionButton(
+                mini: true,
+                heroTag: 'max_zoom_in',
+                onPressed: () {
+                  final currentZoom = _mapController.camera.zoom;
+                  _mapController.move(
+                    _mapController.camera.center,
+                    (currentZoom + 1).clamp(2.0, 18.0),
+                  );
+                },
+                tooltip: 'Zoom In',
+                child: const Icon(Icons.add),
+              ),
+              const SizedBox(height: 8),
+              FloatingActionButton(
+                mini: true,
+                heroTag: 'max_zoom_out',
+                onPressed: () {
+                  final currentZoom = _mapController.camera.zoom;
+                  _mapController.move(
+                    _mapController.camera.center,
+                    (currentZoom - 1).clamp(2.0, 18.0),
+                  );
+                },
+                tooltip: 'Zoom Out',
+                child: const Icon(Icons.remove),
+              ),
+              const SizedBox(height: 8),
+              FloatingActionButton(
+                mini: true,
+                heroTag: 'max_fullscreen_exit',
+                onPressed: () {
+                  setState(() {
+                    _isMapMaximized = false;
+                  });
+                },
+                tooltip: 'Exit Fullscreen',
+                child: const Icon(Icons.fullscreen_exit),
+              ),
+            ],
           ),
         ),
         Positioned(
@@ -542,6 +805,7 @@ class _BatchTrackingScreenState extends State<BatchTrackingScreen> {
     double centerLon = _events.map((e) => e.entityLongitude).reduce((a, b) => a + b) / _events.length;
 
     return FlutterMap(
+      mapController: _mapController,
       options: MapOptions(
         initialCenter: LatLng(centerLat, centerLon),
         initialZoom: 5.0,

@@ -5,6 +5,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../providers/dashboard_provider.dart';
 import '../theme/colors.dart';
 import '../widgets/hyper_text.dart';
+import '../widgets/floating_chat_widget.dart';
 
 class ExecutiveDashboardScreen extends ConsumerStatefulWidget {
   const ExecutiveDashboardScreen({super.key});
@@ -25,49 +26,54 @@ class _ExecutiveDashboardScreenState extends ConsumerState<ExecutiveDashboardScr
     final dashboardState = ref.watch(executiveDashboardProvider);
 
     return Scaffold(
-      body: dashboardState.when(
-        data: (data) {
-          print('Dashboard data loaded: ${data.keys}');
-          return _buildDashboard(context, data);
-        },
-        loading: () {
-          print('Dashboard loading...');
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const CircularProgressIndicator(),
-                const SizedBox(height: 16),
-                Text(
-                  'Loading Executive Dashboard...',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                  ),
+      body: Stack(
+        children: [
+          dashboardState.when(
+            data: (data) {
+              print('Dashboard data loaded: ${data.keys}');
+              return _buildDashboard(context, data);
+            },
+            loading: () {
+              print('Dashboard loading...');
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Loading Executive Dashboard...',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          );
-        },
-        error: (error, stack) {
-          print('Dashboard error: $error');
-          print('Stack trace: $stack');
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error_outline, size: 64, color: Colors.red),
-                const SizedBox(height: 16),
-                Text('Error loading dashboard: $error'),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () => ref.refresh(executiveDashboardProvider),
-                  child: const Text('Retry'),
+              );
+            },
+            error: (error, stack) {
+              print('Dashboard error: $error');
+              print('Stack trace: $stack');
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.error_outline, size: 64, color: Colors.red),
+                    const SizedBox(height: 16),
+                    Text('Error loading dashboard: $error'),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => ref.refresh(executiveDashboardProvider),
+                      child: const Text('Retry'),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          );
-        },
+              );
+            },
+          ),
+          const FloatingChatWidget(context: ChatContext.executiveDashboard),
+        ],
       ),
     );
   }
@@ -155,13 +161,38 @@ class _ExecutiveDashboardScreenState extends ConsumerState<ExecutiveDashboardScr
             },
           ),
           const SizedBox(height: 24),
-          _buildLogisticsTransportation(data['logistics_transportation'] ?? {}),
-          const SizedBox(height: 24),
-          _buildThreeColumnRiskSection(
-            data['supplier_performance'] ?? {},
-            data['risk_assessment'] ?? {},
-            data['predictive_risk_analysis'] ?? {},
+          // Supplier Performance + Predictive Risk Analysis side by side
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 1000) {
+                return Column(
+                  children: [
+                    _buildSupplierPerformance(data['supplier_performance'] ?? {}),
+                    const SizedBox(height: 24),
+                    _buildPredictiveRiskAnalysis(data['predictive_risk_analysis'] ?? {}),
+                  ],
+                );
+              }
+              return IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      flex: 1,
+                      child: _buildSupplierPerformance(data['supplier_performance'] ?? {}),
+                    ),
+                    const SizedBox(width: 24),
+                    Expanded(
+                      flex: 1,
+                      child: _buildPredictiveRiskAnalysis(data['predictive_risk_analysis'] ?? {}),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
+          const SizedBox(height: 24),
+          _buildLogisticsTransportation(data['logistics_transportation'] ?? {}),
         ],
       ),
     );
@@ -864,190 +895,276 @@ class _ExecutiveDashboardScreenState extends ConsumerState<ExecutiveDashboardScr
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  sortColumnIndex: _supplierSortColumnIndex,
-                  sortAscending: _supplierSortAscending,
-                  headingRowColor: WidgetStateProperty.all(
-                    isDark ? Colors.grey[850] : Colors.grey[100],
-                  ),
-                  columns: [
-                    DataColumn(
-                      label: Text(
-                        'Supplier',
-                        style: TextStyle(
-                          color: textColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
+              const SizedBox(height: 16),
+              // Header row with sortable columns
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.grey[850] : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            if (_supplierSortColumnIndex == 0) {
+                              _supplierSortAscending = !_supplierSortAscending;
+                            } else {
+                              _supplierSortColumnIndex = 0;
+                              _supplierSortAscending = true;
+                            }
+                          });
+                        },
+                        child: Row(
+                          children: [
+                            Text(
+                              'Supplier',
+                              style: TextStyle(
+                                color: textColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            Icon(
+                              _supplierSortColumnIndex == 0
+                                  ? (_supplierSortAscending ? Icons.arrow_upward : Icons.arrow_downward)
+                                  : Icons.unfold_more,
+                              size: 14,
+                              color: _supplierSortColumnIndex == 0 ? Colors.blue : Colors.grey,
+                            ),
+                          ],
                         ),
                       ),
-                      onSort: (columnIndex, ascending) {
-                        setState(() {
-                          _supplierSortColumnIndex = columnIndex;
-                          _supplierSortAscending = ascending;
-                        });
-                      },
                     ),
-                    DataColumn(
-                      label: Text(
-                        'On-Time Delivery',
-                        style: TextStyle(
-                          color: textColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
+                    Expanded(
+                      flex: 2,
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            if (_supplierSortColumnIndex == 1) {
+                              _supplierSortAscending = !_supplierSortAscending;
+                            } else {
+                              _supplierSortColumnIndex = 1;
+                              _supplierSortAscending = false;
+                            }
+                          });
+                        },
+                        child: Row(
+                          children: [
+                            Text(
+                              'Fill Rate',
+                              style: TextStyle(
+                                color: textColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            Icon(
+                              _supplierSortColumnIndex == 1
+                                  ? (_supplierSortAscending ? Icons.arrow_upward : Icons.arrow_downward)
+                                  : Icons.unfold_more,
+                              size: 14,
+                              color: _supplierSortColumnIndex == 1 ? Colors.blue : Colors.grey,
+                            ),
+                          ],
                         ),
                       ),
-                      onSort: (columnIndex, ascending) {
-                        setState(() {
-                          _supplierSortColumnIndex = columnIndex;
-                          _supplierSortAscending = ascending;
-                        });
-                      },
                     ),
-                    DataColumn(
-                      label: Text(
-                        'Quality Score',
-                        style: TextStyle(
-                          color: textColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
+                    Expanded(
+                      flex: 2,
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            if (_supplierSortColumnIndex == 2) {
+                              _supplierSortAscending = !_supplierSortAscending;
+                            } else {
+                              _supplierSortColumnIndex = 2;
+                              _supplierSortAscending = false;
+                            }
+                          });
+                        },
+                        child: Row(
+                          children: [
+                            Text(
+                              'Quality',
+                              style: TextStyle(
+                                color: textColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            Icon(
+                              _supplierSortColumnIndex == 2
+                                  ? (_supplierSortAscending ? Icons.arrow_upward : Icons.arrow_downward)
+                                  : Icons.unfold_more,
+                              size: 14,
+                              color: _supplierSortColumnIndex == 2 ? Colors.blue : Colors.grey,
+                            ),
+                          ],
                         ),
                       ),
-                      onSort: (columnIndex, ascending) {
-                        setState(() {
-                          _supplierSortColumnIndex = columnIndex;
-                          _supplierSortAscending = ascending;
-                        });
-                      },
                     ),
-                    DataColumn(
-                      label: Text(
-                        'Lead Time',
-                        style: TextStyle(
-                          color: textColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
+                    Expanded(
+                      flex: 2,
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            if (_supplierSortColumnIndex == 3) {
+                              _supplierSortAscending = !_supplierSortAscending;
+                            } else {
+                              _supplierSortColumnIndex = 3;
+                              _supplierSortAscending = true;
+                            }
+                          });
+                        },
+                        child: Row(
+                          children: [
+                            Text(
+                              'Lead Time',
+                              style: TextStyle(
+                                color: textColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            Icon(
+                              _supplierSortColumnIndex == 3
+                                  ? (_supplierSortAscending ? Icons.arrow_upward : Icons.arrow_downward)
+                                  : Icons.unfold_more,
+                              size: 14,
+                              color: _supplierSortColumnIndex == 3 ? Colors.blue : Colors.grey,
+                            ),
+                          ],
                         ),
                       ),
-                      onSort: (columnIndex, ascending) {
-                        setState(() {
-                          _supplierSortColumnIndex = columnIndex;
-                          _supplierSortAscending = ascending;
-                        });
-                      },
                     ),
-                    DataColumn(
-                      label: Text(
-                        'Risk Score',
-                        style: TextStyle(
-                          color: textColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
+                    Expanded(
+                      flex: 2,
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            if (_supplierSortColumnIndex == 4) {
+                              _supplierSortAscending = !_supplierSortAscending;
+                            } else {
+                              _supplierSortColumnIndex = 4;
+                              _supplierSortAscending = true;
+                            }
+                          });
+                        },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Risk',
+                              style: TextStyle(
+                                color: textColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            Icon(
+                              _supplierSortColumnIndex == 4
+                                  ? (_supplierSortAscending ? Icons.arrow_upward : Icons.arrow_downward)
+                                  : Icons.unfold_more,
+                              size: 14,
+                              color: _supplierSortColumnIndex == 4 ? Colors.blue : Colors.grey,
+                            ),
+                          ],
                         ),
                       ),
-                      onSort: (columnIndex, ascending) {
-                        setState(() {
-                          _supplierSortColumnIndex = columnIndex;
-                          _supplierSortAscending = ascending;
-                        });
-                      },
                     ),
                   ],
-                  rows: suppliers.map<DataRow>((supplier) {
-                    return DataRow(
-                      cells: [
-                        DataCell(
-                          Text(
-                            supplier['name'] ?? '',
-                            style: TextStyle(
-                              color: textColor,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              // Data rows
+              ...suppliers.map((supplier) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: Text(
+                          supplier['name'] ?? '',
+                          style: TextStyle(
+                            color: textColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                        DataCell(
-                          SizedBox(
-                            width: 150,
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: LinearProgressIndicator(
-                                    value: (supplier['on_time_delivery'] ?? 0) / 100,
-                                    backgroundColor: progressBgColor,
-                                    color: Colors.blue,
-                                    minHeight: 6,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '${supplier['on_time_delivery']}%',
-                                  style: TextStyle(
-                                    color: textColor,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          '${supplier['on_time_delivery']}%',
+                          style: TextStyle(
+                            color: textColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        DataCell(
-                          SizedBox(
-                            width: 150,
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: LinearProgressIndicator(
-                                    value: (supplier['quality_score'] ?? 0) / 100,
-                                    backgroundColor: progressBgColor,
-                                    color: Colors.blue,
-                                    minHeight: 6,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '${supplier['quality_score']}%',
-                                  style: TextStyle(
-                                    color: textColor,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          '${supplier['quality_score']}%',
+                          style: TextStyle(
+                            color: textColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        DataCell(
-                          Text(
-                            supplier['lead_time'] ?? '',
-                            style: TextStyle(
-                              color: textColor,
-                              fontSize: 14,
-                            ),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          supplier['lead_time'] ?? '',
+                          style: TextStyle(
+                            color: textColor,
+                            fontSize: 13,
                           ),
                         ),
-                        DataCell(
-                          ShadBadge(
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Center(
+                          child: ShadBadge(
                             backgroundColor: _getRiskColor(supplier['risk_score']),
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               child: Text(
                                 supplier['risk_score'] ?? '',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 12,
+                                  fontSize: 11,
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ],
-                    );
-                  }).toList(),
-                ),
-              ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
             ],
           );
         }
@@ -1066,44 +1183,6 @@ class _ExecutiveDashboardScreenState extends ConsumerState<ExecutiveDashboardScr
       default:
         return AppColors.riskDefault;
     }
-  }
-
-  Widget _buildThreeColumnRiskSection(
-    Map<String, dynamic> supplierPerformanceData,
-    Map<String, dynamic> riskAssessmentData,
-    Map<String, dynamic> predictiveRiskData,
-  ) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // If screen width is less than 1000px (tablet size), stack vertically
-        if (constraints.maxWidth < 1000) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildSupplierPerformance(supplierPerformanceData),
-              const SizedBox(height: 24),
-              _buildPredictiveRiskAnalysis(predictiveRiskData),
-            ],
-          );
-        }
-
-        // Desktop: Two columns side by side
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 1,
-              child: _buildSupplierPerformance(supplierPerformanceData),
-            ),
-            const SizedBox(width: 24),
-            Expanded(
-              flex: 1,
-              child: _buildPredictiveRiskAnalysis(predictiveRiskData),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   Widget _buildPredictiveRiskAnalysis(Map<String, dynamic> riskData) {
@@ -1184,171 +1263,151 @@ class _ExecutiveDashboardScreenState extends ConsumerState<ExecutiveDashboardScr
             ],
           ),
           const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: cardBgColor,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  riskData['disruption_label'] ??
-                      'Potential Supply Chain Disruptions',
-                  style: TextStyle(fontSize: 12, color: textColor),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  riskData['disruption_level'] ?? 'High',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  riskData['period'] ?? '',
-                  style: TextStyle(fontSize: 12, color: textColor),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Contributing Factors',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: textColor,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ...contributingFactors.map((factor) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        factor['name'] ?? '',
-                        style: TextStyle(fontSize: 12, color: textColor),
-                      ),
-                      Text(
-                        '${factor['value']}',
-                        style: TextStyle(fontSize: 12, color: textColor),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  LinearProgressIndicator(
-                    value: (factor['value'] ?? 0) / 100,
-                    backgroundColor: progressBgColor,
-                    color: Colors.blue,
-                  ),
-                ],
-              ),
-            );
-          }),
-          const SizedBox(height: 20),
-          Text(
-            'Disruption Types',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: textColor,
-            ),
-          ),
-          const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              sortColumnIndex: _disruptionTypesSortColumnIndex,
-              sortAscending: _disruptionTypesSortAscending,
-              headingRowColor: WidgetStateProperty.all(
-                isDark ? Colors.grey[850] : Colors.grey[100],
-              ),
-              columns: [
-                DataColumn(
-                  label: Text(
-                    'Disruption Type',
-                    style: TextStyle(
-                      color: textColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                  onSort: (columnIndex, ascending) {
-                    setState(() {
-                      _disruptionTypesSortColumnIndex = columnIndex;
-                      _disruptionTypesSortAscending = ascending;
-                    });
-                  },
-                ),
-                DataColumn(
-                  label: Text(
-                    'Probability',
-                    style: TextStyle(
-                      color: textColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                  onSort: (columnIndex, ascending) {
-                    setState(() {
-                      _disruptionTypesSortColumnIndex = columnIndex;
-                      _disruptionTypesSortAscending = ascending;
-                    });
-                  },
-                ),
-              ],
-              rows: disruptionTypes.map<DataRow>((disruption) {
-                return DataRow(
-                  cells: [
-                    DataCell(
-                      Text(
-                        disruption['type'] ?? '',
-                        style: TextStyle(
-                          color: textColor,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
+          // Two columns: Left (Contributing Factors + Card) | Right (Disruption Types)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Left column: Contributing Factors + Potential Supply Chain Disruptions card
+              Expanded(
+                flex: 1,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Contributing Factors',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: textColor,
                       ),
                     ),
-                    DataCell(
-                      SizedBox(
-                        width: 150,
-                        child: Row(
+                    const SizedBox(height: 12),
+                    ...contributingFactors.map((factor) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: LinearProgressIndicator(
-                                value: (disruption['probability'] ?? 0) / 100,
-                                backgroundColor: progressBgColor,
-                                color: Colors.blue,
-                                minHeight: 6,
-                              ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  factor['name'] ?? '',
+                                  style: TextStyle(fontSize: 12, color: textColor),
+                                ),
+                                Text(
+                                  '${factor['value']}',
+                                  style: TextStyle(fontSize: 12, color: textColor),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '${disruption['probability']}%',
-                              style: TextStyle(
-                                color: textColor,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                              ),
+                            const SizedBox(height: 4),
+                            LinearProgressIndicator(
+                              value: (factor['value'] ?? 0) / 100,
+                              backgroundColor: progressBgColor,
+                              color: Colors.blue,
                             ),
                           ],
                         ),
+                      );
+                    }),
+                    const SizedBox(height: 20),
+                    // Potential Supply Chain Disruptions card
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: cardBgColor,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            riskData['disruption_label'] ??
+                                'Potential Supply Chain Disruptions',
+                            style: TextStyle(fontSize: 12, color: textColor),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            riskData['disruption_level'] ?? 'High',
+                            style: TextStyle(
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                              color: textColor,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            riskData['period'] ?? '',
+                            style: TextStyle(fontSize: 12, color: textColor),
+                          ),
+                        ],
                       ),
                     ),
                   ],
-                );
-              }).toList(),
-            ),
+                ),
+              ),
+              const SizedBox(width: 24),
+              // Right column: Disruption Types
+              Expanded(
+                flex: 1,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Disruption Types',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: textColor,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Custom list instead of DataTable for better space usage
+                    ...disruptionTypes.map((disruption) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    disruption['type'] ?? '',
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  '${disruption['probability']}%',
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            LinearProgressIndicator(
+                              value: (disruption['probability'] ?? 0) / 100,
+                              backgroundColor: progressBgColor,
+                              color: Colors.blue,
+                              minHeight: 6,
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ],
           ),
           ],
         );

@@ -24,9 +24,9 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     return Scaffold(
       body: Column(
         children: [
-          // Header
+          // Header with tabs on the right
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(
@@ -37,54 +37,29 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             ),
             child: Row(
               children: [
+                // Logo and title
                 const Text('🚚', style: TextStyle(fontSize: 24)),
                 const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Supply Chain Tracker',
-                        style: theme.textTheme.large.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Supply Chain Control Tower',
+                      style: theme.textTheme.large.copyWith(
+                        fontWeight: FontWeight.w600,
                       ),
-                      Text(
-                        'Real-time Inventory Management',
-                        style: theme.textTheme.muted.copyWith(
-                          fontSize: 12,
-                        ),
+                    ),
+                    Text(
+                      'Real-time Inventory Management',
+                      style: theme.textTheme.muted.copyWith(
+                        fontSize: 12,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                IconButton(
-                  onPressed: () =>
-                      ref.read(themeModeProvider.notifier).toggleTheme(),
-                  icon: Icon(
-                    Theme.of(context).brightness == Brightness.dark
-                        ? Icons.wb_sunny_rounded
-                        : Icons.nightlight_round,
-                    size: 20,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Tabs
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: theme.colorScheme.border,
-                  width: 1,
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
+                const SizedBox(width: 32),
+                // Tabs
                 _buildTab(
                   icon: Icons.dashboard_rounded,
                   label: 'Executive Dashboard',
@@ -108,6 +83,18 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                   label: 'Planning',
                   index: 3,
                 ),
+                const Spacer(),
+                // Theme toggle
+                IconButton(
+                  onPressed: () =>
+                      ref.read(themeModeProvider.notifier).toggleTheme(),
+                  icon: Icon(
+                    Theme.of(context).brightness == Brightness.dark
+                        ? Icons.wb_sunny_rounded
+                        : Icons.nightlight_round,
+                    size: 20,
+                  ),
+                ),
               ],
             ),
           ),
@@ -115,11 +102,11 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           Expanded(
             child: IndexedStack(
               index: _selectedIndex,
-              children: const [
-                ExecutiveDashboardScreen(),
-                InventoryScreen(),
-                BatchTrackingScreen(),
-                PlanningScreen(),
+              children: [
+                const ExecutiveDashboardScreen(),
+                const InventoryScreen(),
+                const BatchTrackingScreen(),
+                PlanningScreen(isVisible: _selectedIndex == 3),
               ],
             ),
           ),

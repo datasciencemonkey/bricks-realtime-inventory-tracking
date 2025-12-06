@@ -15,6 +15,7 @@ class InventoryItem {
   final String lastUpdatedCst;
   final String expectedArrivalTime;
   final String batchId;
+  final String transitStatus; // "On Time", "Delayed", etc.
 
   InventoryItem({
     required this.recordId,
@@ -33,7 +34,11 @@ class InventoryItem {
     required this.lastUpdatedCst,
     required this.expectedArrivalTime,
     required this.batchId,
+    required this.transitStatus,
   });
+
+  /// Check if this shipment is delayed
+  bool get isDelayed => transitStatus.toLowerCase().contains('delay');
 
   factory InventoryItem.fromJson(Map<String, dynamic> json) {
     return InventoryItem(
@@ -54,6 +59,7 @@ class InventoryItem {
       lastUpdatedCst: json['last_updated_cst'] ?? '',
       expectedArrivalTime: json['expected_arrival_time'] ?? '',
       batchId: json['batch_id'] ?? '',
+      transitStatus: json['transit_status'] ?? 'On Time',
     );
   }
 }

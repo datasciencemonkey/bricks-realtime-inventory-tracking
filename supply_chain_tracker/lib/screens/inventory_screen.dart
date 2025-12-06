@@ -4,11 +4,11 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-import 'package:intl/intl.dart';
 import '../models/inventory_item.dart';
-import '../models/status_summary.dart';
 import '../services/api_service.dart';
 import '../providers/inventory_provider.dart';
+import '../theme/colors.dart';
+import '../widgets/floating_chat_widget.dart';
 
 class InventoryScreen extends ConsumerStatefulWidget {
   const InventoryScreen({super.key});
@@ -21,15 +21,15 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   final ApiService _apiService = ApiService();
   List<InventoryItem> _allInventory = [];
   List<InventoryItem> _filteredInventory = [];
-  StatusSummary? _summary;
   bool _isLoading = true;
 
   List<String> _selectedProducts = [];
   List<String> _selectedStatuses = [];
   List<String> _availableProducts = [];
   List<String> _availableStatuses = [];
-  bool _showDataTable = false;
   bool _isMapMaximized = false;
+  bool _highlightDelays = false;
+  bool _onlyShowDelays = false;
 
   // Status colors matching Streamlit
   final Map<String, Color> _statusColors = {
@@ -62,7 +62,6 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
         productsState.hasValue && statusesState.hasValue) {
       try {
         final inventory = inventoryState.value!;
-        final summary = summaryState.value!;
         final products = productsState.value!;
         final statuses = statusesState.value!
             .where((s) => s.toLowerCase() != 'delivered')
@@ -76,7 +75,6 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
             _selectedProducts = [];
             _selectedStatuses = [];
             _filteredInventory = inventory;
-            _summary = summary;
             _isLoading = false;
           });
           hasCachedData = true;
@@ -94,7 +92,6 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     // Always refresh data in background to ensure it's up to date
     try {
       final inventory = await _apiService.getInventory();
-      final summary = await _apiService.getInventorySummary();
       final products = await _apiService.getProducts();
       final statuses = (await _apiService.getStatuses())
           .where((s) => s.toLowerCase() != 'delivered')
@@ -110,7 +107,6 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
           } else {
             _applyFilters();
           }
-          _summary = summary;
           _isLoading = false;
         });
       }
@@ -131,13 +127,48 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
       _filteredInventory = _allInventory.where((item) {
         final productMatch = _selectedProducts.isEmpty || _selectedProducts.contains(item.productName);
         final statusMatch = _selectedStatuses.isEmpty || _selectedStatuses.contains(item.statusCategory);
-        return productMatch && statusMatch;
+        final delayMatch = !_onlyShowDelays || item.isDelayed;
+        return productMatch && statusMatch && delayMatch;
       }).toList();
     });
   }
 
   Color _getStatusColor(String status) {
     return _statusColors[status] ?? const Color(0xFF95a5a6);
+  }
+
+  /// Build a highlighted marker for delayed shipments with warning icon
+  /// Uses the status color as background to match the legend
+  Widget _buildDelayedMarker(double size, Color statusColor) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: statusColor,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: AppColors.maroon600,
+          width: 3,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.maroon600.withValues(alpha: 0.5),
+            blurRadius: 8,
+            spreadRadius: 2,
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.3),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: const Icon(
+        Icons.warning_amber_rounded,
+        color: Colors.white,
+        size: 16,
+      ),
+    );
   }
 
   @override
@@ -150,19 +181,42 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
       return _buildMaximizedMap();
     }
 
-    return Column(
+    return Stack(
       children: [
-        _buildFilters(),
-        _buildSummaryCards(),
-        Expanded(child: _buildMapWithControls()),
-        _buildLegend(),
+        Column(
+          children: [
+            _buildFilters(),
+            _buildSummaryCards(),
+            Expanded(child: _buildMapWithControls()),
+            _buildLegend(),
+          ],
+        ),
+        const FloatingChatWidget(context: ChatContext.realtimeSnapshot),
       ],
     );
   }
 
+  bool get _hasActiveFilters =>
+      _selectedProducts.isNotEmpty ||
+      _selectedStatuses.isNotEmpty ||
+      _onlyShowDelays ||
+      _highlightDelays;
+
+  void _clearAllFilters() {
+    setState(() {
+      _selectedProducts = [];
+      _selectedStatuses = [];
+      _highlightDelays = false;
+      _onlyShowDelays = false;
+      _filteredInventory = _allInventory;
+    });
+  }
+
   Widget _buildFilters() {
+    final theme = ShadTheme.of(context);
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -174,25 +228,46 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
             child: _buildStatusFilter(),
           ),
           const SizedBox(width: 16),
-          ShadCard(
-            backgroundColor: const Color(0xFF6DB144),
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                const Text(
-                  'Total Shipments',
-                  style: TextStyle(color: Colors.white, fontSize: 12),
-                ),
-                Text(
-                  '${_filteredInventory.length}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
+          // Clear All Filters button - aligned with filter dropdowns
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Empty label spacer to match filter label height
+              Padding(
+                padding: const EdgeInsets.only(left: 12, bottom: 8),
+                child: Text(
+                  ' ', // Empty label for alignment
+                  style: theme.textTheme.small.copyWith(
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-              ],
-            ),
+              ),
+              ShadButton.outline(
+                onPressed: _hasActiveFilters ? _clearAllFilters : null,
+                size: ShadButtonSize.sm,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.filter_alt_off_rounded,
+                      size: 16,
+                      color: _hasActiveFilters
+                          ? theme.colorScheme.foreground
+                          : theme.colorScheme.mutedForeground,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Clear Filters',
+                      style: TextStyle(
+                        color: _hasActiveFilters
+                            ? theme.colorScheme.foreground
+                            : theme.colorScheme.mutedForeground,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -215,9 +290,11 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
           ),
         ),
         ShadSelect<String>.multiple(
+          key: ValueKey('products_${_selectedProducts.length}'),
           minWidth: 300,
           allowDeselection: true,
           closeOnSelect: false,
+          initialValues: _selectedProducts.toSet(),
           placeholder: const Text('Select products...'),
           options: _availableProducts
               .map((product) => ShadOption(value: product, child: Text(product)))
@@ -259,9 +336,11 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
           ),
         ),
         ShadSelect<String>.multiple(
+          key: ValueKey('statuses_${_selectedStatuses.length}'),
           minWidth: 300,
           allowDeselection: true,
           closeOnSelect: false,
+          initialValues: _selectedStatuses.toSet(),
           placeholder: const Text('Select statuses...'),
           options: _availableStatuses
               .map((status) => ShadOption(value: status, child: Text(status)))
@@ -288,11 +367,19 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   }
 
   Widget _buildSummaryCards() {
-    // Calculate filtered summary
+    // Calculate filtered summary based on product/status filters (not delay filter)
+    // We need to count delays from the product/status filtered set, not including delay filter
+    final baseFilteredInventory = _allInventory.where((item) {
+      final productMatch = _selectedProducts.isEmpty || _selectedProducts.contains(item.productName);
+      final statusMatch = _selectedStatuses.isEmpty || _selectedStatuses.contains(item.statusCategory);
+      return productMatch && statusMatch;
+    }).toList();
+
     final inTransit = _filteredInventory.where((item) => item.statusCategory == 'In Transit').length;
     final atDc = _filteredInventory.where((item) => item.statusCategory == 'At DC').length;
     final atDock = _filteredInventory.where((item) => item.statusCategory == 'At Dock').length;
     final totalUnits = _filteredInventory.fold<int>(0, (sum, item) => sum + item.qty);
+    final delayedCount = baseFilteredInventory.where((item) => item.isDelayed).length;
 
     // Calculate total dollar value (qty * unit_price)
     final totalValue = _filteredInventory.fold<double>(
@@ -312,63 +399,226 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSummaryCard(
+          _buildMetricCard(
             '🚚 In Transit',
             inTransit.toString(),
             const Color(0xFFe74c3c),
           ),
           const SizedBox(width: 8),
-          _buildSummaryCard(
+          _buildMetricCard(
             '🏢 At DC',
             atDc.toString(),
             const Color(0xFF2ecc71),
           ),
           const SizedBox(width: 8),
-          _buildSummaryCard(
+          _buildMetricCard(
             '⚓ At Dock',
             atDock.toString(),
             const Color(0xFF3498db),
           ),
           const SizedBox(width: 8),
-          _buildSummaryCard(
+          _buildMetricCard(
             '📊 Total Units',
             NumberFormat('#,###').format(totalUnits),
             const Color(0xFF6DB144),
           ),
           const SizedBox(width: 8),
-          _buildSummaryCard(
+          _buildMetricCard(
             '💰 Total Value',
             formatValue(totalValue),
             const Color(0xFF9b59b6),
           ),
+          const SizedBox(width: 8),
+          // Delays card with integrated controls
+          _buildDelaysCard(delayedCount),
         ],
       ),
     );
   }
 
-  Widget _buildSummaryCard(String title, String value, Color color) {
+  Widget _buildMetricCard(String title, String value, Color color) {
     return Expanded(
       child: ShadCard(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               title,
               style: ShadTheme.of(context).textTheme.muted.copyWith(
                     fontSize: 12,
                   ),
+              overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 4),
-            Text(
-              value,
-              style: ShadTheme.of(context).textTheme.h3.copyWith(
-                    color: color,
-                  ),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                style: ShadTheme.of(context).textTheme.h3.copyWith(
+                      color: color,
+                    ),
+              ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDelaysCard(int delayedCount) {
+    final theme = ShadTheme.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hasDelays = delayedCount > 0;
+
+    // Theme-aware colors for delays card
+    final mutedColor = theme.colorScheme.mutedForeground;
+    final delayTitleColor = isDark ? AppColors.yellow600 : AppColors.navy800;
+    final delayCountColor = isDark ? const Color(0xFFFF6B6B) : AppColors.maroon600; // Brighter red for dark mode
+
+    return Expanded(
+      child: Container(
+        decoration: BoxDecoration(
+          color: hasDelays
+              ? AppColors.yellow600.withValues(alpha: isDark ? 0.15 : 0.1)
+              : theme.colorScheme.card,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: hasDelays
+                ? (isDark ? AppColors.yellow600.withValues(alpha: 0.6) : AppColors.maroon600)
+                : theme.colorScheme.border,
+            width: hasDelays ? 2 : 1,
+          ),
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Title row with icon
+            Row(
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  size: 16,
+                  color: hasDelays ? AppColors.yellow600 : mutedColor,
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    hasDelays ? 'Delays Detected' : 'Delays',
+                    style: theme.textTheme.muted.copyWith(
+                      fontSize: 12,
+                      color: hasDelays ? delayTitleColor : null,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            // Count
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                delayedCount.toString(),
+                style: theme.textTheme.h3.copyWith(
+                  color: hasDelays ? delayCountColor : mutedColor,
+                ),
+              ),
+            ),
+            // Controls - only shown when there are delays
+            if (hasDelays) ...[
+              const SizedBox(height: 8),
+              // Highlight on Map checkbox
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    _highlightDelays = !_highlightDelays;
+                    if (!_highlightDelays) {
+                      _onlyShowDelays = false;
+                      _applyFilters();
+                    }
+                  });
+                },
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: ShadCheckbox(
+                        value: _highlightDelays,
+                        onChanged: (value) {
+                          setState(() {
+                            _highlightDelays = value;
+                            if (!value) {
+                              _onlyShowDelays = false;
+                              _applyFilters();
+                            }
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Highlight on Map',
+                        style: theme.textTheme.small.copyWith(fontSize: 11),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 4),
+              // Show Only Delays checkbox
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    _onlyShowDelays = !_onlyShowDelays;
+                    if (_onlyShowDelays) {
+                      _highlightDelays = true;
+                    }
+                    _applyFilters();
+                  });
+                },
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: ShadCheckbox(
+                        value: _onlyShowDelays,
+                        onChanged: (value) {
+                          setState(() {
+                            _onlyShowDelays = value;
+                            if (value) {
+                              _highlightDelays = true;
+                            }
+                            _applyFilters();
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Show Only Delays',
+                        style: theme.textTheme.small.copyWith(fontSize: 11),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -478,25 +728,43 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
             final dominantStatus = statusCounts.entries.reduce((a, b) => a.value > b.value ? a : b).key;
 
             // Check if any items have expected arrival time
-            final itemsWithETA = items.where((item) => item.expectedArrivalTime != null && item.expectedArrivalTime!.isNotEmpty).toList();
+            final itemsWithETA = items.where((item) => item.expectedArrivalTime.isNotEmpty).toList();
             String? etaInfo;
             if (itemsWithETA.isNotEmpty) {
               // Show the earliest ETA if multiple items have ETA
-              final etas = itemsWithETA.map((item) => item.expectedArrivalTime!).toList();
+              final etas = itemsWithETA.map((item) => item.expectedArrivalTime).toList();
               etas.sort();
               etaInfo = 'ETA: ${etas.first}';
             }
 
+            // Check if any items in this location are delayed
+            final hasDelayedItems = items.any((item) => item.isDelayed);
+            final delayedItemCount = items.where((item) => item.isDelayed).length;
+
+            // Get unique product names at this location
+            final productNames = items.map((item) => item.productName).toSet().toList();
+            final productsDisplay = productNames.length <= 2
+                ? productNames.join(', ')
+                : '${productNames.take(2).join(', ')} +${productNames.length - 2} more';
+
             // Build tooltip message
-            String tooltipMessage = '$location\n$totalShipments shipments\n$totalQty units\n$dominantStatus';
+            String tooltipMessage = '$location\n$productsDisplay\n$totalShipments shipments\n$totalQty units\n$dominantStatus';
             if (etaInfo != null) {
               tooltipMessage += '\n$etaInfo';
             }
+            if (hasDelayedItems) {
+              tooltipMessage += '\n⚠️ $delayedItemCount delayed';
+            }
+
+            // Determine marker appearance based on delay status
+            final bool showDelayHighlight = _highlightDelays && hasDelayedItems;
+            final statusColor = _getStatusColor(dominantStatus);
+            final markerSize = showDelayHighlight ? 28.0 : 20.0;
 
             return Marker(
               point: LatLng(firstItem.latitude, firstItem.longitude),
-              width: 20,
-              height: 20,
+              width: markerSize,
+              height: markerSize,
               child: Tooltip(
                 message: tooltipMessage,
                 decoration: BoxDecoration(
@@ -508,25 +776,27 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                   fontSize: 12,
                   height: 1.4,
                 ),
-                child: Container(
-                  width: 16,
-                  height: 16,
-                  decoration: BoxDecoration(
-                    color: _getStatusColor(dominantStatus).withValues(alpha: 0.8),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: _getStatusColor(dominantStatus),
-                      width: 2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.3),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
+                child: showDelayHighlight
+                    ? _buildDelayedMarker(markerSize, statusColor)
+                    : Container(
+                        width: 16,
+                        height: 16,
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.8),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: statusColor,
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.3),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
-                ),
               ),
             );
           }).toList(),
@@ -581,40 +851,4 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     );
   }
 
-  Widget _buildDataTableToggle() {
-    return ExpansionTile(
-      title: const Text('📊 View Detailed Data'),
-      initiallyExpanded: _showDataTable,
-      onExpansionChanged: (expanded) {
-        setState(() => _showDataTable = expanded);
-      },
-      children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: DataTable(
-            columns: const [
-              DataColumn(label: Text('Reference')),
-              DataColumn(label: Text('Product')),
-              DataColumn(label: Text('Status')),
-              DataColumn(label: Text('Qty')),
-              DataColumn(label: Text('Price')),
-              DataColumn(label: Text('Location')),
-              DataColumn(label: Text('Destination')),
-            ],
-            rows: _filteredInventory.map((item) {
-              return DataRow(cells: [
-                DataCell(Text(item.referenceNumber)),
-                DataCell(Text(item.productName)),
-                DataCell(Text(item.status)),
-                DataCell(Text(item.qty.toString())),
-                DataCell(Text('\$${item.unitPrice.toStringAsFixed(2)}')),
-                DataCell(Text(item.currentLocation)),
-                DataCell(Text(item.destination)),
-              ]);
-            }).toList(),
-          ),
-        ),
-      ],
-    );
-  }
 }

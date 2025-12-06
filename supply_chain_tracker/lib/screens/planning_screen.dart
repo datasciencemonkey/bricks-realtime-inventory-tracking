@@ -9,10 +9,16 @@ import 'dart:async';
 import 'package:gpt_markdown/gpt_markdown.dart';
 import '../theme/colors.dart';
 import '../widgets/border_beam.dart';
+import '../widgets/gemini_splash/gemini_splash.dart';
 import '../services/api_service.dart';
 
 class PlanningScreen extends StatefulWidget {
-  const PlanningScreen({super.key});
+  final bool isVisible;
+
+  const PlanningScreen({
+    super.key,
+    this.isVisible = false,
+  });
 
   @override
   State<PlanningScreen> createState() => _PlanningScreenState();
@@ -24,16 +30,43 @@ class _PlanningScreenState extends State<PlanningScreen> {
   final _user = const types.User(id: 'user-1', firstName: 'You');
   final _assistant = const types.User(
     id: 'assistant-1',
-    firstName: 'Supply Chain Assistant',
+    firstName: 'Supply Chain Planning Agent',
   );
   final TextEditingController _textController = TextEditingController();
   bool _isLoading = false;
+
+  // Splash animation state
+  bool _showSplash = false;
+  bool _hasPlayedSplash = false;
+  final GlobalKey<GeminiSplashState> _splashKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
     // Add welcome message
     _addInitialMessage();
+  }
+
+  @override
+  void didUpdateWidget(PlanningScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Trigger splash when tab becomes visible for the first time
+    if (widget.isVisible && !oldWidget.isVisible && !_hasPlayedSplash) {
+      setState(() {
+        _showSplash = true;
+        _hasPlayedSplash = true;
+      });
+    }
+  }
+
+  void _onSplashComplete() {
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        setState(() {
+          _showSplash = false;
+        });
+      }
+    });
   }
 
   @override
@@ -48,7 +81,7 @@ class _PlanningScreenState extends State<PlanningScreen> {
       createdAt: DateTime.now().millisecondsSinceEpoch,
       id: const Uuid().v4(),
       text:
-          'Hello! I\'m your Supply Chain Assistant. I can help you with inventory queries, shipment tracking, and data insights. How can I assist you today?',
+          'Hello! I\'m your Supply Chain Planning Agent. I can help you with inventory queries, shipment tracking, and data insights. How can I assist you today?',
     );
 
     setState(() {
@@ -272,7 +305,7 @@ class _PlanningScreenState extends State<PlanningScreen> {
               colorTo: AppColors.sunriseOrange,
               staticBorderColor: theme.colorScheme.border,
               borderRadius: BorderRadius.circular(24),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+              padding: EdgeInsets.zero,
               child: Container(
                 decoration: BoxDecoration(
                   color: theme.colorScheme.background,
@@ -292,8 +325,8 @@ class _PlanningScreenState extends State<PlanningScreen> {
                     ),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
+                      horizontal: 20,
+                      vertical: 14,
                     ),
                   ),
                   maxLines: null,
@@ -333,6 +366,157 @@ class _PlanningScreenState extends State<PlanningScreen> {
     );
   }
 
+  Widget _buildChatContent(ShadThemeData theme, bool isDark) {
+    return Center(
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 800),
+        margin: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: theme.colorScheme.border,
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.1),
+              blurRadius: 24,
+              spreadRadius: 0,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            // Chat header
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: AppColors.forestGradient,
+                border: Border(
+                  bottom: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.support_agent_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Supply Chain Planning Agent',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 18,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            if (_isLoading) ...[
+                              const SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Thinking...',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ] else
+                              const Text(
+                                'Online • Ready to help with planning and insights',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 13,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _clearChat,
+                    icon: const Icon(
+                      Icons.delete_outline_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                    tooltip: 'Clear chat',
+                  ),
+                ],
+              ),
+            ),
+            // Chat messages
+            Expanded(
+              child: Chat(
+                messages: _messages,
+                onSendPressed: _handleSendPressed,
+                user: _user,
+                theme: DefaultChatTheme(
+                  backgroundColor: theme.colorScheme.card,
+                  primaryColor: AppColors.unfiGreen,
+                  secondaryColor: theme.colorScheme.muted,
+                  inputBackgroundColor: theme.colorScheme.background,
+                  inputTextColor: theme.colorScheme.foreground,
+                  inputBorderRadius: BorderRadius.circular(24),
+                  messageBorderRadius: 12,
+                  inputPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  receivedMessageBodyTextStyle: TextStyle(
+                    color: theme.colorScheme.foreground,
+                    fontSize: 15,
+                  ),
+                  sentMessageBodyTextStyle: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                  ),
+                  inputTextStyle: TextStyle(
+                    color: theme.colorScheme.foreground,
+                    fontSize: 15,
+                  ),
+                ),
+                showUserAvatars: true,
+                showUserNames: false,
+                customBottomWidget: _buildInputWidget(theme, isDark),
+                textMessageBuilder: _buildTextMessage,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = ShadTheme.of(context);
@@ -340,153 +524,26 @@ class _PlanningScreenState extends State<PlanningScreen> {
 
     return Scaffold(
       backgroundColor: theme.colorScheme.background,
-      body: Center(
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 800),
-          margin: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.card,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: theme.colorScheme.border,
-              width: 1.5,
+      body: Stack(
+        children: [
+          // Main chat content
+          AnimatedOpacity(
+            opacity: _showSplash ? 0.0 : 1.0,
+            duration: const Duration(milliseconds: 500),
+            child: _buildChatContent(theme, isDark),
+          ),
+          // Gemini splash overlay
+          if (_showSplash)
+            Positioned.fill(
+              child: GeminiSplash(
+                key: _splashKey,
+                onAnimationComplete: _onSplashComplete,
+                duration: const Duration(milliseconds: 3000),
+                primaryColor: AppColors.lava500,
+                secondaryColor: AppColors.lava600,
+              ),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.1),
-                blurRadius: 24,
-                spreadRadius: 0,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              // Chat header
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: AppColors.forestGradient,
-                  border: Border(
-                    bottom: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      width: 1,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.support_agent_rounded,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Supply Chain Assistant',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 18,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Row(
-                            children: [
-                              if (_isLoading) ...[
-                                const SizedBox(
-                                  width: 12,
-                                  height: 12,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  'Thinking...',
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ] else
-                                const Text(
-                                  'Online • Ready to help with planning and insights',
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: _clearChat,
-                      icon: const Icon(
-                        Icons.delete_outline_rounded,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                      tooltip: 'Clear chat',
-                    ),
-                  ],
-                ),
-              ),
-              // Chat messages
-              Expanded(
-                child: Chat(
-                  messages: _messages,
-                  onSendPressed: _handleSendPressed,
-                  user: _user,
-                  theme: DefaultChatTheme(
-                    backgroundColor: theme.colorScheme.card,
-                    primaryColor: AppColors.unfiGreen,
-                    secondaryColor: theme.colorScheme.muted,
-                    inputBackgroundColor: theme.colorScheme.background,
-                    inputTextColor: theme.colorScheme.foreground,
-                    inputBorderRadius: BorderRadius.circular(24),
-                    messageBorderRadius: 12,
-                    inputPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    receivedMessageBodyTextStyle: TextStyle(
-                      color: theme.colorScheme.foreground,
-                      fontSize: 15,
-                    ),
-                    sentMessageBodyTextStyle: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                    ),
-                    inputTextStyle: TextStyle(
-                      color: theme.colorScheme.foreground,
-                      fontSize: 15,
-                    ),
-                  ),
-                  showUserAvatars: true,
-                  showUserNames: false,
-                  customBottomWidget: _buildInputWidget(theme, isDark),
-                  textMessageBuilder: _buildTextMessage,
-                ),
-              ),
-            ],
-          ),
-        ),
+        ],
       ),
     );
   }

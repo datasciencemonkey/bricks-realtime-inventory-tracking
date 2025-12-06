@@ -6,6 +6,7 @@ import '../widgets/particle_background.dart';
 import '../widgets/text_reveal_chaos.dart';
 import '../widgets/background_ripples.dart';
 import '../providers/inventory_provider.dart';
+import '../theme/colors.dart';
 import 'main_screen.dart';
 
 class LandingPage extends ConsumerStatefulWidget {
@@ -23,9 +24,6 @@ class _LandingPageState extends ConsumerState<LandingPage> {
 
   // Databricks Orange color
   static const Color databricksOrange = Color(0xFFFF3621);
-
-  // Green tinge for ripples
-  static const Color greenTinge = Color(0xFF6DB144);
 
   bool get _showLaunchButton => _textAnimationComplete && _isDataReady;
 
@@ -47,6 +45,15 @@ class _LandingPageState extends ConsumerState<LandingPage> {
       if (mounted) {
         setState(() {
           _textAnimationComplete = true;
+        });
+      }
+    });
+
+    // Failsafe: show button after 6 seconds regardless of data loading
+    Future.delayed(const Duration(seconds: 6), () {
+      if (mounted && !_isDataReady) {
+        setState(() {
+          _isDataReady = true;
         });
       }
     });
@@ -90,6 +97,9 @@ class _LandingPageState extends ConsumerState<LandingPage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final prefetchState = ref.watch(prefetchDataProvider);
 
+    // Use appropriate colors for dark/light mode
+    final accentColor = isDark ? AppColors.oatLight : AppColors.navy900;
+
     return Scaffold(
       body: Stack(
         children: [
@@ -98,8 +108,8 @@ class _LandingPageState extends ConsumerState<LandingPage> {
             child: ParticleBackground(
               particleCount: 150,
               particleColor: isDark
-                  ? theme.colorScheme.primary.withValues(alpha: 0.6)
-                  : theme.colorScheme.primary.withValues(alpha: 0.4),
+                  ? AppColors.oatLight.withValues(alpha: 0.6)
+                  : AppColors.navy900.withValues(alpha: 0.4),
               particleSize: 3.0,
               connectParticles: true,
               connectionDistance: 100.0,
@@ -112,7 +122,7 @@ class _LandingPageState extends ConsumerState<LandingPage> {
               children: [
                 // App logo/icon with background ripples
                 BackgroundRipples(
-                  color: greenTinge,
+                  color: accentColor,
                   numberOfRipples: 3,
                   minRadius: 40,
                   maxRadius: 80,
@@ -122,23 +132,23 @@ class _LandingPageState extends ConsumerState<LandingPage> {
                     height: 120,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                      color: accentColor.withValues(alpha: 0.1),
                       border: Border.all(
-                        color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                        color: accentColor.withValues(alpha: 0.3),
                         width: 2,
                       ),
                     ),
                     child: Icon(
                       Icons.local_shipping_rounded,
                       size: 64,
-                      color: theme.colorScheme.primary,
+                      color: accentColor,
                     ),
                   ),
                 ),
                 const SizedBox(height: 32),
                 // App title
                 Text(
-                  'Supply Chain Tracker',
+                  'Supply Chain Control Tower',
                   style: GoogleFonts.dmSans(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,

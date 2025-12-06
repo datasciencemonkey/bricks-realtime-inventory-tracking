@@ -1,11 +1,11 @@
 {
-    "name": "supply_chain_tracker",
-    "short_name": "supply_chain_tracker",
+    "name": "Supply Chain Control Tower",
+    "short_name": "Control Tower",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Real-time inventory management and supply chain tracking application.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
